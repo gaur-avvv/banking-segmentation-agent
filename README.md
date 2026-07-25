@@ -263,6 +263,18 @@ banking-agent chat --demo
 
 The demo creates a small non-sensitive dataset under `data/demo`. The public repository intentionally does not include the Kaggle banking CSV: its listing states “Data files © Original Authors,” and the file contains customer identifiers, demographics, balances, and transaction activity. Download it from the [Kaggle source listing](https://www.kaggle.com/datasets/shivamb/bank-customer-segmentation) only if your use and redistribution rights permit it, then pass its path with `--data-path`.
 
+### First-run dataset setup
+
+You can save a dataset path once for the clone:
+
+```bash
+banking-agent setup
+```
+
+Interactive terminal commands (`run`, `chat`, `api`, and `adk-web`) also ask for a CSV, ZIP, or dataset-folder path when no explicit path is supplied. Press Enter to use the automatic local fallback. Non-interactive scripts and API calls never block: they use `BANKING_DATA_PATH` or the safe `data/demo` dataset. The setup command writes only `BANKING_DATA_PATH` to the ignored local `.env` file.
+
+Automatic downloads are intentionally not performed silently. Kaggle sources may require credentials and may restrict redistribution. If you have a permitted HTTPS/approved source, download it yourself (or place it in the clone) and pass the resulting path; this keeps credentials and banking records out of the agent.
+
 ### Interactive terminal chat
 
 Use chat mode when you want to ask several questions in one terminal session and see how the agent reached each answer:

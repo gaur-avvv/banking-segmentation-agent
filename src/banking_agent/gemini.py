@@ -17,7 +17,7 @@ def _load_local_env() -> None:
         if "=" not in line or line.lstrip().startswith("#"):
             continue
         key, value = line.split("=", 1)
-        if key in {"LLM_PROVIDER", "LLM_MODEL", "GEMINI_API_KEY", "GEMINI_MODEL", "OPENAI_API_KEY", "OPEN_AI_API", "OPENAI_API", "OPENAI_MODEL", "OPENAI_BASE_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "GROQ_API_KEY", "GROQ_MODEL", "OLLAMA_MODEL", "OLLAMA_BASE_URL"}:
+        if key in {"LLM_PROVIDER", "LLM_MODEL", "BANKING_DATA_PATH", "GEMINI_API_KEY", "GEMINI_MODEL", "OPENAI_API_KEY", "OPEN_AI_API", "OPENAI_API", "OPENAI_MODEL", "OPENAI_BASE_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "GROQ_API_KEY", "GROQ_MODEL", "OLLAMA_MODEL", "OLLAMA_BASE_URL"}:
             os.environ.setdefault(key, value.strip().strip("'\""))
 
 

@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from typing import Any
 
 from .agent import run_agent
@@ -17,6 +18,36 @@ def _resolve_data_path(args: argparse.Namespace) -> str:
     return str(ensure_demo_data(f"{args.data_path}/demo"))
 
 
+def _first_run_dataset_prompt(args: argparse.Namespace) -> None:
+    """Offer a path prompt only for an interactive terminal invocation."""
+    if args.command == "setup" or not sys.stdin.isatty() or args.data_path != "data":
+        return
+    print("No dataset path was supplied. Press Enter to use the automatic local dataset fallback.")
+    try:
+        value = input("Dataset CSV/ZIP/folder path [data]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return
+    if value:
+        args.data_path = value
+
+
+def _setup(args: argparse.Namespace) -> None:
+    """Persist a dataset path in the clone-local .env file."""
+    default = os.environ.get("BANKING_DATA_PATH", "") or ("data" if args.data_path == "data" else args.data_path)
+    print("Dataset setup (local path only; no banking records are uploaded).")
+    value = input(f"Dataset CSV/ZIP/folder path [{default}]: ").strip() or default
+    path = os.path.abspath(os.path.expanduser(value))
+    env_path = os.path.abspath(".env")
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, encoding="utf-8") as handle:
+            lines = [line for line in handle.read().splitlines() if not line.startswith("BANKING_DATA_PATH=")]
+    lines.append(f"BANKING_DATA_PATH={path}")
+    with open(env_path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+    print(f"Saved BANKING_DATA_PATH={path} to .env")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the banking segmentation agent or open its terminal chat"
@@ -24,8 +55,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("chat", "api", "adk-web", "run"),
-        help="Use adk-web for the Google ADK UI, chat for REPL, api for HTTP, run for JSON",
+        choices=("setup", "chat", "api", "adk-web", "run"),
+        help="Use setup to save a dataset path; adk-web for Google ADK UI; chat/api/run for execution",
     )
     parser.add_argument(
         "--data-path",
@@ -218,6 +249,10 @@ def _adk_web(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = _parser().parse_args()
+    _first_run_dataset_prompt(args)
+    if args.command == "setup":
+        _setup(args)
+        return
     if args.command == "chat":
         _chat(args)
         return
