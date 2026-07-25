@@ -98,6 +98,30 @@ Install Python **3.10 or newer** and Git. For datasets around one million rows, 
 ```bash
 git clone https://github.com/gaur-avvv/banking-segmentation-agent.git
 cd banking-segmentation-agent
+```
+
+Recommended one-command setup:
+
+```bash
+# Linux, macOS, or WSL
+bash scripts/setup.sh
+```
+
+```powershell
+# Windows PowerShell
+.\scripts\setup.ps1
+```
+
+```bat
+:: Windows Command Prompt
+scripts\setup.cmd
+```
+
+Each script creates/uses `.venv`, installs the development and Google ADK extras, asks for a dataset CSV/ZIP/folder path, saves it as `BANKING_DATA_PATH` in `.env`, creates `.env` from `.env.example` without overwriting existing settings, and prints the next commands. Press Enter at the dataset prompt to use the automatic safe demo fallback. On Linux/macOS/WSL, `uv` is used when available; otherwise standard Python `venv` and `pip` are used.
+
+Manual setup is still available:
+
+```bash
 python -m venv .venv
 ```
 
