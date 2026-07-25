@@ -13,20 +13,27 @@ FEATURE_COLUMNS = [
 ]
 
 
-def _clean_events(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def clean_and_filter_events(frames: dict[str, pd.DataFrame]) -> tuple[dict[str, pd.DataFrame], dict]:
+    """Coerce types, remove unusable rows, and return an audit summary."""
     result = {name: df.copy() for name, df in frames.items()}
+    audit = {}
     for name in ("balances", "transactions"):
         df = result[name]
+        before = len(df)
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+        value_column = "balance" if name == "balances" else "amount"
+        df[value_column] = pd.to_numeric(df[value_column], errors="coerce")
         df.dropna(subset=["customer_id", "timestamp"], inplace=True)
         df.drop_duplicates(subset=["customer_id", "timestamp"], inplace=True)
-    result["balances"]["balance"] = pd.to_numeric(result["balances"]["balance"], errors="coerce")
-    result["transactions"]["amount"] = pd.to_numeric(result["transactions"]["amount"], errors="coerce")
-    return result
+        df.dropna(subset=[value_column], inplace=True)
+        df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df.dropna(subset=[value_column], inplace=True)
+        audit[name] = {"input_rows": before, "usable_rows": len(df), "dropped_rows": before - len(df)}
+    return result, audit
 
 
 def build_customer_features(frames: dict[str, pd.DataFrame], config: SegmentationConfig) -> pd.DataFrame:
-    frames = _clean_events(frames)
+    frames, _ = clean_and_filter_events(frames)
     customers = frames["customers"][["customer_id"]].drop_duplicates().copy()
     latest = max(frames["balances"]["timestamp"].max(), frames["transactions"]["timestamp"].max())
     cutoff = latest - pd.Timedelta(days=config.lookback_days)

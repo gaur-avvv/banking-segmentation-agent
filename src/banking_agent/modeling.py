@@ -8,6 +8,7 @@ from sklearn.feature_selection import SelectKBest, mutual_info_regression
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import davies_bouldin_score, silhouette_score
 from sklearn.mixture import GaussianMixture
+from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import KFold, train_test_split
@@ -36,10 +37,49 @@ def evaluation_sample(df: pd.DataFrame, config: SegmentationConfig) -> pd.DataFr
     return df.sample(config.max_evaluation_customers, random_state=config.random_state)
 
 
+def _mutual_information(X, y):
+    return mutual_info_regression(X, y, random_state=42)
+
+
 def _pipeline(k: int) -> Pipeline:
     # MI uses a leakage-safe proxy target constructed from fold-local behavior ranking.
     prep = Pipeline([("impute", SimpleImputer(strategy="median", add_indicator=True)), ("scale", RobustScaler())])
-    return Pipeline([("prep", prep), ("select", SelectKBest(mutual_info_regression, k=k))])
+    return Pipeline([("prep", prep), ("select", SelectKBest(_mutual_information, k=k))])
+
+
+def dimensionality_reduction_snapshot(features: pd.DataFrame, training_features: pd.DataFrame, config: SegmentationConfig) -> dict:
+    """Fit selection/PCA on training data and project a deterministic feature sample."""
+    fit = evaluation_sample(training_features, config)
+    projected = evaluation_sample(features, config)
+    k = min(6, len(FEATURE_COLUMNS))
+    transformer = _pipeline(k)
+    fit_matrix = transformer.fit_transform(eligible_feature_matrix(fit), _behavior_proxy(fit))
+    projected_matrix = transformer.transform(eligible_feature_matrix(projected))
+    if fit_matrix.shape[0] >= 2 and fit_matrix.shape[1] >= 2:
+        pca = PCA(n_components=2, random_state=config.random_state)
+        pca.fit(fit_matrix)
+        coordinates = pca.transform(projected_matrix)
+        explained_variance_ratio = [float(value) for value in pca.explained_variance_ratio_]
+    else:
+        # Keep the output schema usable for tiny datasets and human review.
+        coordinates = np.zeros((len(projected), 2))
+        explained_variance_ratio = [1.0, 0.0]
+    prep_names = transformer.named_steps["prep"].get_feature_names_out()
+    selected_mask = transformer.named_steps["select"].get_support()
+    selected_features = [str(name) for name, keep in zip(prep_names, selected_mask) if keep]
+    return {
+        "coordinates": pd.DataFrame({
+            "customer_id": projected["customer_id"].to_numpy(),
+            "pc1": coordinates[:, 0],
+            "pc2": coordinates[:, 1],
+        }),
+        "method": "PCA",
+        "n_components": 2,
+        "selected_features": selected_features,
+        "explained_variance_ratio": explained_variance_ratio,
+        "fit_rows": len(fit),
+        "projected_rows": len(projected),
+    }
 
 
 def _behavior_proxy(X: pd.DataFrame) -> np.ndarray:

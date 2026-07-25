@@ -1,11 +1,15 @@
 """Generate non-sensitive synthetic banking data for a reproducible demo."""
+import argparse
 from pathlib import Path
 import numpy as np
 import pandas as pd
 
 
 def main():
-    root = Path(__file__).parents[1] / "data"
+    parser = argparse.ArgumentParser(description="Generate non-sensitive synthetic banking data")
+    parser.add_argument("--output-dir", type=Path, default=Path(__file__).parents[1] / "data")
+    args = parser.parse_args()
+    root = args.output_dir
     root.mkdir(exist_ok=True)
     rng = np.random.default_rng(42)
     customer_ids = [f"C{i:04d}" for i in range(1, 121)]
@@ -14,7 +18,7 @@ def main():
     balances, transactions, holdings = [], [], []
     for i, customer_id in enumerate(customer_ids):
         tier = i % 3
-        base = [4_000, 24_000, 75_000][tier] + rng.normal(0, 1_500)
+        base = max(100, [4_000, 24_000, 75_000][tier] + rng.normal(0, 1_500))
         activity = [1, 7, 18][tier]
         for date in dates[::7]:
             balances.append((customer_id, date.isoformat(), max(0, base + rng.normal(0, base * .06))))

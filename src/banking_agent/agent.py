@@ -9,11 +9,12 @@ from langgraph.graph import END, START, StateGraph
 
 from .config import SegmentationConfig
 from .contracts import data_quality_report, load_dataset
-from .features import build_customer_features
-from .modeling import assign_rule_segments, chronological_split, cross_validate_stability, derive_rule_thresholds, evaluation_sample, evaluate_unsupervised_models, final_test_report
+from .features import build_customer_features, clean_and_filter_events
+from .modeling import assign_rule_segments, chronological_split, cross_validate_stability, derive_rule_thresholds, dimensionality_reduction_snapshot, evaluation_sample, evaluate_unsupervised_models, final_test_report
 from .recommendations import priority_candidates
 from .gemini import plan_query_with_gemini
 from .memory import MemoryEntry, SQLiteMemoryStore
+from .visualization import create_visualizations
 
 
 class AgentState(TypedDict, total=False):
@@ -25,6 +26,7 @@ class AgentState(TypedDict, total=False):
     segmented: object
     thresholds: dict
     report: dict
+    projection: object
     user_id: str
     memory_store: object
     memory_profile: object
@@ -36,6 +38,7 @@ def event(state: AgentState, step: str, detail: str) -> dict:
 
 def load_and_validate(state: AgentState):
     frames = load_dataset(state["data_dir"])
+    _, cleaning_audit = clean_and_filter_events(frames)
     plan = plan_query_with_gemini(state["query"])
     profile = None
     if state.get("memory_store") and state.get("user_id"):
@@ -43,6 +46,7 @@ def load_and_validate(state: AgentState):
     events = state.get("events", []) + [
         {"step": "query_planning", "detail": json.dumps(plan)},
         {"step": "data_validation", "detail": json.dumps(data_quality_report(frames))},
+        {"step": "data_cleaning_filtering", "detail": json.dumps(cleaning_audit)},
     ]
     if profile:
         events.append({"step": "memory_profile", "detail": json.dumps({"memory_count": profile.memory_count, "preferred_contact_method": profile.preferred_contact_method})})
@@ -51,7 +55,7 @@ def load_and_validate(state: AgentState):
 
 def engineer_features(state: AgentState):
     features = build_customer_features(state["frames"], SegmentationConfig())
-    return {"features": features, **event(state, "feature_engineering", f"Created {len(features)} customer rows and 9 behavioral features.")}
+    return {"features": features, **event(state, "feature_extraction", f"Created {len(features)} customer rows and 9 behavioral features after lookback filtering.")}
 
 
 def train_and_segment(state: AgentState):
@@ -62,14 +66,21 @@ def train_and_segment(state: AgentState):
     cv = cross_validate_stability(train_eval, config) if len(train_eval) >= 16 else {"note": "Dataset too small for stable CV."}
     thresholds = derive_rule_thresholds(train, config)
     segmented, _ = assign_rule_segments(state["features"], config, thresholds)
+    projection = dimensionality_reduction_snapshot(state["features"], train, config)
     report = {"determinism": {"random_state": config.random_state, "threshold_source": "training_partition_only", "router": "deterministic_fallback"},
               "split_sizes": {"train": len(train), "validation": len(validation), "test": len(test)},
               "rule_thresholds": thresholds,
               "unsupervised_validation": {k: {m: v for m, v in score.items() if m not in {"model", "transformer"}} for k, score in model_scores.items()},
               "cross_validation": cv, "evaluation_sampling": {"train": len(train_eval), "validation": len(validation_eval)},
+              "feature_selection": {"method": "mutual_information", "selected_features": projection["selected_features"]},
+              "dimensionality_reduction": {k: v for k, v in projection.items() if k != "coordinates"},
               "final_test": final_test_report(test, config, thresholds)}
-    return {"segmented": segmented, "thresholds": thresholds, "report": report,
-            **event(state, "model_evaluation", "Evaluated K-Means/GMM on validation; deployed auditable rule baseline without tuning on test data.")}
+    events = state.get("events", []) + [
+        {"step": "feature_selection", "detail": f"Selected {len(projection['selected_features'])} features using mutual information on training data."},
+        {"step": "dimensionality_reduction", "detail": f"Projected {projection['projected_rows']} customers to 2 PCA components fitted on training data."},
+        {"step": "model_evaluation", "detail": "Evaluated K-Means/GMM on validation; deployed auditable rule baseline without tuning on test data."},
+    ]
+    return {"segmented": segmented, "thresholds": thresholds, "report": report, "projection": projection["coordinates"], "events": events}
 
 
 def formulate_response(state: AgentState):
@@ -100,6 +111,13 @@ def run_agent(data_dir: str, query: str, user_id: str | None = None, memory_db: 
     out = Path(data_dir).parent / "artifacts"
     out.mkdir(exist_ok=True)
     result["segmented"].to_csv(out / "customer_segments.csv", index=False)
+    projection = result.get("projection")
+    visualization_paths = []
+    try:
+        visualization_paths = create_visualizations(result["segmented"], {"coordinates": projection}, out / "visualizations")
+        result["events"].append({"step": "visualization", "detail": f"Created {len(visualization_paths)} diagnostic charts."})
+    except (ImportError, OSError, ValueError) as exc:
+        result["events"].append({"step": "visualization", "detail": f"Visualization fallback: {type(exc).__name__}"})
     if memory_store and user_id and memory_consent:
         memory_store.save(MemoryEntry(
             user_id=user_id, interaction_type="analytics_query", consented=True,
@@ -112,4 +130,4 @@ def run_agent(data_dir: str, query: str, user_id: str | None = None, memory_db: 
         result["events"].append({"step": "memory_saved", "detail": "Consented analytics interaction saved locally; query text was not retained."})
     with (out / "run_report.json").open("w") as fh:
         json.dump({"query": query, "events": result["events"], "report": result["report"]}, fh, indent=2, default=str)
-    return {"events": result["events"], "report": result["report"], "artifacts": [str(out / "customer_segments.csv"), str(out / "run_report.json")]}
+    return {"events": result["events"], "report": result["report"], "artifacts": [str(out / "customer_segments.csv"), str(out / "run_report.json"), *visualization_paths]}

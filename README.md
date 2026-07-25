@@ -23,7 +23,11 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
 | Area | What it does |
 | --- | --- |
 | Customer segmentation | Assigns `priority`, `regular`, `dormant`, or `needs_review` using training-derived, explainable rules. |
+| Data cleaning and filtering | Coerces timestamps/numerics, removes unusable rows and duplicates, audits dropped rows, and filters events to the configured lookback window. |
 | Feature engineering | Builds balance, stability, activity, recency, transaction-size, and product-engagement features. |
+| Feature selection | Uses leakage-safe mutual-information selection fitted on training data only. |
+| Dimensionality reduction | Fits deterministic two-component PCA on selected training features for diagnostics and visual exploration. |
+| Visualization | Saves segment distribution, PCA segment projection, and feature-by-segment distribution charts as PNG artifacts. |
 | ML evaluation | Evaluates K-Means and GMM on held-out validation data and checks K-Means stability with cross-validation. |
 | Candidate conversion | Ranks regular customers by deterministic distance to priority thresholds and proposes an action. |
 | Agent workflow | Uses LangGraph for visible query planning, validation, engineering, evaluation, and recommendation stages. |
@@ -45,7 +49,8 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
                                   │
         ┌─────────────────────────▼─────────────────────────┐
         │ LangGraph workflow                                 │
-        │ validate → features → evaluate/segment → recommend │
+        │ clean/filter → features → select → PCA → evaluate  │
+        │ segment → visualize → recommend                    │
         └───────┬───────────────────────┬────────────────────┘
                 │                       │
      ┌──────────▼──────────┐  ┌─────────▼─────────────┐
@@ -59,7 +64,7 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
      └──────────┬──────────────────────────────────────────┘
                 │
      ┌──────────▼──────────────────────────────────────────┐
-     │ CSV segments · JSON run report · execution events    │
+     │ CSV · JSON trace · PCA metadata · PNG diagnostics    │
      └─────────────────────────────────────────────────────┘
 ```
 
@@ -230,21 +235,27 @@ Outputs are written beside the selected data directory:
 ```text
 artifacts/customer_segments.csv
 artifacts/run_report.json
+artifacts/visualizations/segment_distribution.png
+artifacts/visualizations/pca_segments.png
+artifacts/visualizations/feature_distributions.png
 ```
 
-`customer_segments.csv` includes the segment, reason, fallback level, assignment confidence, and engineered features. `run_report.json` includes the agent event trace, split sizes, thresholds, validation metrics, cross-validation results, and candidate recommendations.
+`customer_segments.csv` includes the segment, reason, fallback level, assignment confidence, and engineered features. `run_report.json` includes the agent event trace, split sizes, thresholds, feature-selection metadata, PCA variance information, validation metrics, cross-validation results, and candidate recommendations. The PNG charts are diagnostic outputs; they are not used to make the deployable rule decision.
 
 ## ML lifecycle
 
 1. **Validate:** inspect schema, row counts, duplicates, and missingness.
-2. **Engineer:** aggregate transaction and balance events to customer features.
-3. **Split:** chronological split where time cohorts exist; deterministic customer split for a snapshot.
-4. **Train:** fit preprocessing and feature selection only on training data.
-5. **Validate:** evaluate K-Means and GMM; calculate silhouette and Davies–Bouldin metrics.
-6. **Stability check:** run deterministic K-Fold evaluation on the training partition.
-7. **Test:** report the rule baseline on untouched test data.
-8. **Serve:** persist the rule rationale and recommendation candidates.
-9. **Monitor:** in production, monitor input drift, segment migration, candidate conversion, fairness, and model fallback rates.
+2. **Clean and filter:** coerce timestamps/numerics, remove invalid/duplicate event rows, and apply the lookback window.
+3. **Engineer:** aggregate transaction and balance events to customer features.
+4. **Split:** chronological split where time cohorts exist; deterministic customer split for a snapshot.
+5. **Select:** fit mutual-information feature selection on training data only.
+6. **Reduce:** fit two-component PCA on selected training features for stable diagnostics.
+7. **Train:** evaluate K-Means and GMM on the held-out validation partition.
+8. **Stability check:** run deterministic K-Fold evaluation on the training partition.
+9. **Test:** report the rule baseline on untouched test data.
+10. **Visualize:** save segment counts, PCA projections, and feature distribution charts.
+11. **Serve:** persist the rule rationale and recommendation candidates.
+12. **Monitor:** in production, monitor input drift, segment migration, candidate conversion, fairness, and model fallback rates.
 
 ### Engineered features
 
