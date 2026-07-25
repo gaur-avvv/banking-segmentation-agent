@@ -117,6 +117,31 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
+### WSL quick start
+
+From Ubuntu/WSL, `uv run` can launch the console even before a global `banking-agent` command exists:
+
+```bash
+python3 -m pip install --user uv
+uv sync --extra adk
+uv run banking-agent adk-web \\
+  --provider gemini \\
+  --model gemma-4-26b-a4b-it \\
+  --data-path /mnt/c/Users/Dell/Downloads/Compressed/bank_transactions.csv \\
+  --port 8001
+```
+
+Or install into an activated environment:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev,adk]"
+banking-agent adk-web --data-path /mnt/c/Users/Dell/Downloads/Compressed/bank_transactions.csv --port 8001
+```
+
+In WSL, Windows drives use `/mnt/c/...`; do not use `mnt\\c\\...`. If `banking-agent: command not found` appears, use `uv run banking-agent ...` or activate `.venv` first.
+
 If your OS-managed Python cannot create environments, install its `venv` package or use [uv](https://docs.astral.sh/uv/):
 
 ```bash
