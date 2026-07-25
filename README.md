@@ -414,6 +414,16 @@ The local API console at `/ui` includes a dataset selector populated from `/data
 
 For ADK Web, `--data-path` is exported as `BANKING_DATA_PATH` before the child ADK process starts. Every specialist therefore receives the same dataset context. A missing path is resolved to the local demo and recorded in the tool result; the root router is instructed not to guess filenames or pause for a path that can be safely resolved.
 
+ADK routing is query-aware: segmentation, comparison, and recommendation requests use the sequential analytics agents, while explanation/audit requests use the governance review loop. ADK tools use a local TTL cache keyed by dataset path and normalized query, so an unchanged request returns `cache_hit: true` instead of repeating EDA, feature extraction, or segmentation. The default cache TTL is 15 minutes and can be changed with `BANKING_AGENT_CACHE_TTL`.
+
+ADK Web streams agent events by default. The launcher accepts `--provider` and `--model` and exports them to the ADK process:
+
+```bash
+banking-agent adk-web --provider gemini --model gemma-4-26b-a4b-it --port 8001
+```
+
+Gemini models are native to Google ADK. OpenRouter, Groq, OpenAI-compatible, and Ollama providers remain available through the local API/CLI planner; use their API keys and model names there. Generation is configured with low temperature and a 512-token cap to reduce quota usage. The system exposes concise tool summaries and decisions, not private chain-of-thought.
+
 Run against a folder containing the supported ZIP:
 
 ```bash

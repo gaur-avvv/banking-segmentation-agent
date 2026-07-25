@@ -243,6 +243,11 @@ def _adk_web(args: argparse.Namespace) -> None:
     # ADK Web launches the root agent in a child process. Pass the selected
     # dataset through the environment so every specialist sees the same path.
     os.environ["BANKING_DATA_PATH"] = args.data_path
+    if args.provider and args.provider != "auto":
+        os.environ["LLM_PROVIDER"] = args.provider
+    if args.model:
+        os.environ["ADK_MODEL"] = args.model
+        os.environ["LLM_MODEL"] = args.model
     print(f"Starting Google ADK web UI on http://{args.host}:{args.port}")
     subprocess.run(["adk", "web", "--host", args.host, "--port", str(args.port)], check=True)
 

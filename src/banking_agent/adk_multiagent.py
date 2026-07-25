@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import os
+import copy
+import threading
+import time
 from pathlib import Path
 
 from .agent import run_agent
@@ -12,24 +15,51 @@ from .config import SegmentationConfig
 from .datasets import resolve_dataset_path
 
 
+_TOOL_CACHE: dict[tuple[str, str, str], tuple[float, dict]] = {}
+_CACHE_LOCK = threading.Lock()
+_CACHE_TTL_SECONDS = int(os.environ.get("BANKING_AGENT_CACHE_TTL", "900"))
+
+
+def _cached_tool(kind: str, resolved: str, query: str, producer) -> dict:
+    key = (kind, resolved, query)
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        item = _TOOL_CACHE.get(key)
+        if item and now - item[0] < _CACHE_TTL_SECONDS:
+            result = copy.deepcopy(item[1])
+            result["cache_hit"] = True
+            return result
+    result = producer()
+    with _CACHE_LOCK:
+        _TOOL_CACHE[key] = (now, copy.deepcopy(result))
+    result["cache_hit"] = False
+    return result
+
+
 def eda_tool(data_path: str | None = None) -> dict:
     """Profile a local dataset without sending rows to the model provider."""
     resolved, reason = resolve_dataset_path(data_path)
-    frames = load_dataset(resolved)
-    return {"status": "ok", "data_path": resolved, "resolution": reason, "quality": data_quality_report(frames)}
+    return _cached_tool("eda", resolved, "", lambda: {"status": "ok", "data_path": resolved, "resolution": reason, "quality": data_quality_report(load_dataset(resolved))})
 
 
 def feature_engineering_tool(data_path: str | None = None) -> dict:
     """Build the local customer feature table and report its schema."""
     resolved, reason = resolve_dataset_path(data_path)
-    frames = load_dataset(resolved)
-    features = build_customer_features(frames, SegmentationConfig())
+    return _cached_tool("features", resolved, "", lambda: _feature_result(resolved, reason))
+
+
+def _feature_result(resolved: str, reason: str) -> dict:
+    features = build_customer_features(load_dataset(resolved), SegmentationConfig())
     return {"status": "ok", "data_path": resolved, "resolution": reason, "customers": len(features), "features": list(features.columns)}
 
 
 def segmentation_tool(data_path: str | None = None, query: str = "Segment customers") -> dict:
     """Run the deterministic, audited segmentation workflow locally."""
     resolved, _ = resolve_dataset_path(data_path)
+    return _cached_tool("segmentation", resolved, query.strip().lower(), lambda: _segmentation_result(resolved, query))
+
+
+def _segmentation_result(resolved: str, query: str) -> dict:
     result = run_agent(resolved, query, llm_provider="none")
     return {"status": "ok", "report": result["report"], "artifacts": result["artifacts"]}
 
@@ -53,40 +83,46 @@ def create_multi_agent_root_agent():
         raise RuntimeError("Install the optional ADK extra with: pip install -e '.[adk]'") from exc
 
     model = os.environ.get("ADK_MODEL", os.environ.get("GEMINI_MODEL", "gemma-4-26b-a4b-it"))
+    try:
+        from google.genai.types import GenerateContentConfig
+        generation_config = GenerateContentConfig(temperature=0.1, max_output_tokens=512)
+    except ImportError:
+        generation_config = None
+    common = {"generate_content_config": generation_config} if generation_config is not None else {}
     eda_agent = Agent(
         name="eda_agent",
         model=model,
         description="Profiles local banking data and reports quality metrics.",
         instruction="Call eda_tool for dataset profiling. Never request raw rows in your response.",
-        tools=[eda_tool],
+        tools=[eda_tool], **common,
     )
     feature_agent = Agent(
         name="feature_engineering_agent",
         model=model,
         description="Builds customer-level behavioral features locally.",
         instruction="Call feature_engineering_tool after EDA and summarize engineered columns.",
-        tools=[feature_engineering_tool],
+        tools=[feature_engineering_tool], **common,
     )
     segmentation_agent = Agent(
         name="segmentation_agent",
         model=model,
         description="Runs the audited segmentation and evaluation workflow.",
         instruction="Call segmentation_tool with the user dataset path and query. Do not invent metrics.",
-        tools=[segmentation_tool],
+        tools=[segmentation_tool], **common,
     )
     explainability_agent = Agent(
         name="explainability_agent",
         model=model,
         description="Explains segment rules and proposes policy-safe next actions.",
         instruction="Call explainability_tool for each requested segment and mention human review when needed.",
-        tools=[explainability_tool],
+        tools=[explainability_tool], **common,
     )
     review_explainability_agent = Agent(
         name="governance_explainability_agent",
         model=model,
         description="Checks explanations for auditability and human-review needs.",
         instruction="Call explainability_tool and identify any human-review requirement.",
-        tools=[explainability_tool],
+        tools=[explainability_tool], **common,
     )
     sequential_pipeline = SequentialAgent(
         name="analytics_sequential_pipeline",
@@ -104,12 +140,14 @@ def create_multi_agent_root_agent():
         model=model,
         description="Routes retail banking queries to specialized ADK agents.",
         instruction=(
-            "Route every analytics request to analytics_sequential_pipeline. "
-            "Use governance_review_loop when explanation, audit, or human review is requested. "
+            "Route dynamically by intent: segmentation/comparison/recommendation uses analytics_sequential_pipeline; "
+            "explanation, audit, or human review uses governance_review_loop (and analytics only if needed). "
             "The dataset path is the path explicitly provided by the user, otherwise BANKING_DATA_PATH, "
             "otherwise the safe local demo fallback. Never guess banking_data.csv, never ask for the path "
             "again when a fallback is available, and pass the same data_path to every specialist tool. "
-            "Keep banking records local, do not expose raw rows or credentials, and return structured summaries."
+            "Keep banking records local, do not expose raw rows or credentials, and return concise structured summaries. "
+            "Reuse tool results when cache_hit is true; do not call the same tool twice for an unchanged path/query."
         ),
+        **common,
         sub_agents=[sequential_pipeline, review_loop],
     )
