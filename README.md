@@ -364,7 +364,7 @@ Optional integrations:
 python -m pip install -e ".[adk,a2a]"
 ```
 
-The deterministic LangGraph workflow remains the execution path. If `google-adk` is installed, `banking_agent.adk_adapter.create_adk_root_agent()` provides an ADK root-agent descriptor. If `a2a-sdk` is installed, it can replace the local façade with a full SDK server. The local UI and API remain usable without either optional package.
+The deterministic LangGraph workflow remains the safety/audit execution path. If `google-adk` is installed, `banking_agent.adk_adapter.create_adk_root_agent()` builds a real ADK root router with `SequentialAgent` and `LoopAgent` orchestration. Its specialist agents are `eda_agent`, `feature_engineering_agent`, `segmentation_agent`, `explainability_agent`, and `governance_explainability_agent`; their registered tools call the same local data, feature, segmentation, and explanation functions. If `a2a-sdk` is installed, it can replace the local façade with a full SDK server. The local UI and API remain usable without either optional package.
 
 The repository includes `adk_app/agent.py` with the ADK-required `root_agent` symbol. Run it from the repository root:
 
