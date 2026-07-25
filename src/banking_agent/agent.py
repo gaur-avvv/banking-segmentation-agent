@@ -100,9 +100,35 @@ def train_and_segment(state: AgentState):
 def formulate_response(state: AgentState):
     candidates = priority_candidates(state["segmented"], state["thresholds"])
     report = dict(state["report"])
-    report["segment_counts"] = state["segmented"].segment.value_counts().to_dict()
+    segmented = state["segmented"].sort_values(["segment", "customer_id"], kind="stable").reset_index(drop=True)
+    report["segment_counts"] = segmented.segment.value_counts().sort_index().to_dict()
+    report["eda_summary"] = data_quality_report(state["frames"])
+    profile_columns = ["avg_balance_90d", "transaction_frequency_monthly", "recency_days", "avg_transaction_amount"]
+    report["segment_profiles"] = {
+        str(segment): {
+            "customers": int(len(group)),
+            "averages": {column: float(group[column].mean()) for column in profile_columns if column in group},
+            "description": {
+                "priority": "Higher maintained balances and transaction activity; relationship-expansion opportunity.",
+                "regular": "Active customers below priority thresholds; balance-building and engagement opportunity.",
+                "dormant": "Low recent activity or long recency; retention and re-engagement priority.",
+                "needs_review": "Insufficient or ambiguous history; require human review before personalization.",
+            }.get(str(segment), "Behavioral segment requiring review."),
+        }
+        for segment, group in segmented.groupby("segment", sort=True)
+    }
+    report["retention_recommendations"] = {
+        "priority": "Protect relationship with service reviews, rewards, and relevant wealth/savings journeys.",
+        "regular": "Use savings goals, payroll balance prompts, autopay, card activation, and rewards onboarding.",
+        "dormant": "Use compliant re-engagement, service assistance, and preference-aware contact controls.",
+    }
+    report["cross_sell_up_sell"] = {
+        "priority": ["wealth/savings review", "rewards or premium card"],
+        "regular": ["savings goal", "autopay/rewards onboarding"],
+        "dormant": ["service assistance", "reactivation journey"],
+    }
     report["top_priority_candidates"] = candidates[["customer_id", "priority_gap_score", "recommended_action", "recommendation_reason"]].to_dict("records")
-    return {"report": report, **event(state, "recommendations", f"Ranked {len(candidates)} regular customers for policy-safe priority conversion actions.")}
+    return {"segmented": segmented, "report": report, **event(state, "recommendations", f"Ranked {len(candidates)} regular customers for policy-safe priority conversion actions.")}
 
 
 def build_graph():

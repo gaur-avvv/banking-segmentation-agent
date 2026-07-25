@@ -625,6 +625,8 @@ artifacts/visualizations/feature_distributions.png
 
 `customer_segments.csv` includes the segment, reason, fallback level, assignment confidence, and engineered features. `run_report.json` includes the agent event trace, split sizes, thresholds, feature-selection metadata, PCA variance information, validation metrics, cross-validation results, and candidate recommendations. The PNG charts are diagnostic outputs; they are not used to make the deployable rule decision.
 
+Every completed run also returns `eda_summary`, `segment_profiles`, `segment_counts`, sorted customer assignments, `retention_recommendations`, `cross_sell_up_sell`, and `top_priority_candidates`. Segment profiles include customer counts, behavioral averages, and plain-language descriptions. The recommendation outputs are policy templates for analyst review, not automatic financial eligibility or campaign decisions.
+
 ## ML lifecycle
 
 1. **Validate:** inspect schema, row counts, duplicates, and missingness.
