@@ -366,6 +366,22 @@ python -m pip install -e ".[adk,a2a]"
 
 The deterministic LangGraph workflow remains the execution path. If `google-adk` is installed, `banking_agent.adk_adapter.create_adk_root_agent()` provides an ADK root-agent descriptor. If `a2a-sdk` is installed, it can replace the local façade with a full SDK server. The local UI and API remain usable without either optional package.
 
+The repository includes `adk_app/agent.py` with the ADK-required `root_agent` symbol. Run it from the repository root:
+
+```bash
+python -m pip install -e ".[adk]"
+export GOOGLE_API_KEY="your-gemini-key"
+adk run adk_app
+```
+
+Start the ADK development web UI:
+
+```bash
+adk web --port 8001
+```
+
+Open `http://127.0.0.1:8001` and select `adk_app`. ADK Web is intended for development/debugging; the project's local console remains `banking-agent api`, which displays the deterministic specialist-agent/tool trace.
+
 Run against a folder containing the supported ZIP:
 
 ```bash
