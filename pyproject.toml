@@ -20,6 +20,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+adk = ["google-adk>=1.0"]
+a2a = ["a2a-sdk>=1.0"]
 
 [project.scripts]
 banking-agent = "banking_agent.cli:main"

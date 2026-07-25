@@ -34,6 +34,9 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
 | Fit diagnostics | Compares train and validation silhouette scores and flags acceptable generalization, overfitting risk, or underfitting risk. |
 | Candidate conversion | Ranks regular customers by deterministic distance to priority thresholds and proposes an action. |
 | Agent workflow | Uses LangGraph for visible query planning, validation, engineering, evaluation, and recommendation stages. |
+| Multi-agent trace | Labels specialist agents and tools for every workflow stage and exposes the trace as JSON/SSE. |
+| Web UI | Local browser console at `/ui` with live progress, agent/tool cards, and complete JSON response. |
+| Inter-agent protocol | Agent Card at `/.well-known/agent.json` and an A2A-friendly JSON-RPC endpoint at `/a2a`. |
 | LLM planning | Uses hosted Gemma 4 when configured; otherwise a deterministic keyword router takes over. |
 | Episodic memory | Provides consent-gated SQLite interaction memory, deterministic retrieval, profile rebuilding, and deletion. |
 | Auditability | Persists segments and a JSON event trace with data checks, model results, fallbacks, and decisions. |
@@ -314,6 +317,14 @@ Start the local API with a default dataset path:
 banking-agent api --data-path data --host 127.0.0.1 --port 8000
 ```
 
+Open the browser console:
+
+```text
+http://127.0.0.1:8000/ui
+```
+
+The console displays specialist-agent calls (`data_quality_agent`, `feature_agent`, `model_agent`, `governance_agent`, `recommendation_agent`, and `visualization_agent`), tool names, details, and the final JSON response.
+
 Check health and run a query:
 
 ```bash
@@ -336,6 +347,24 @@ The request may override the server's default path:
 ```
 
 The API returns the same final report, event trace, leakage audit, fit diagnostics, recommendations, and artifact paths as the terminal CLI.
+
+### A2A and Google ADK
+
+The service exposes an Agent Card at `GET /.well-known/agent.json` and an A2A-friendly JSON-RPC façade at `POST /a2a`:
+
+```bash
+curl -X POST http://127.0.0.1:8000/a2a \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","params":{"query":"Compare transaction sizes","data_path":"data","provider":"none"}}'
+```
+
+Optional integrations:
+
+```bash
+python -m pip install -e ".[adk,a2a]"
+```
+
+The deterministic LangGraph workflow remains the execution path. If `google-adk` is installed, `banking_agent.adk_adapter.create_adk_root_agent()` provides an ADK root-agent descriptor. If `a2a-sdk` is installed, it can replace the local façade with a full SDK server. The local UI and API remain usable without either optional package.
 
 Run against a folder containing the supported ZIP:
 
