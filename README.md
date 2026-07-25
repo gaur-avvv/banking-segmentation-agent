@@ -450,7 +450,7 @@ What is the average transaction size for priority and regular customers?
 Which regular customers can be converted to priority?
 ```
 
-After each query, the CLI prints the planned intent, segment counts, candidate actions, artifact paths, and the LangGraph event trace (`planning → validation → features → evaluation → recommendations`). The trace makes fallback behavior and the deterministic workflow visible.
+After each query, the CLI prints the planned intent, segment counts, candidate actions, artifact paths, and an agent/tool trace such as `[feature_agent] → build_customer_features [completed]`. The trace makes delegation, fallback behavior, and the deterministic workflow visible. The browser UI and SSE API expose the same structured trace as JSON events.
 
 Built-in chat commands:
 

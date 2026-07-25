@@ -9,6 +9,7 @@ import sys
 from typing import Any
 
 from .agent import run_agent
+from .orchestration import build_agent_trace
 
 
 def _resolve_data_path(args: argparse.Namespace) -> str:
@@ -124,10 +125,9 @@ def _trace_plan(events: list[dict[str, Any]]) -> str | None:
 def _print_trace(events: list[dict[str, Any]]) -> None:
     print("\nAgent trace")
     print("-----------")
-    for index, item in enumerate(events, start=1):
-        step = str(item.get("step", "unknown")).replace("_", " ").title()
+    for item in build_agent_trace(events):
         detail = str(item.get("detail", "")).replace("\n", " ")
-        print(f"{index:>2}. {step}: {detail}")
+        print(f"{item['sequence']:>2}. [{item['agent']}] → {item['tool']} [{item['status']}]\n    {detail}")
 
 
 def _print_summary(result: dict[str, Any], show_trace: bool = True) -> None:
