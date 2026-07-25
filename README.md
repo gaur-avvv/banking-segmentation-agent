@@ -204,6 +204,7 @@ Set `GEMINI_API_KEY` locally. The default configured planner is `gemma-4-26b-a4b
 ```dotenv
 GEMINI_API_KEY=replace-with-your-new-key
 GEMINI_MODEL=gemma-4-26b-a4b-it
+GEMINI_FALLBACK_MODELS=gemini-2.5-flash,gemini-2.0-flash
 ```
 
 Provider selection is automatic by default. Gemini is preferred when `GEMINI_API_KEY` exists, followed by OpenRouter, Groq, and OpenAI-compatible providers. A local Ollama model can be selected explicitly without a cloud key. You may select explicitly:
@@ -253,6 +254,8 @@ $env:OLLAMA_MODEL = "gemma3:4b"
 ```
 
 Only the query is sent to the selected planner; banking records remain local. OpenRouter's `openrouter/free` router and `:free` model variants are subject to changing availability and rate limits; Groq free quotas also depend on the account and model. Ollama runs locally. If keys are absent, quota-limited, or produce invalid JSON, the agent logs the reason and uses its deterministic local router. API keys must never be committed or pasted into chat.
+
+Gemma 4 remains the default model. For transient Gemini `503 UNAVAILABLE`, `429`, quota, or timeout errors, the query planner automatically tries the comma-separated `GEMINI_FALLBACK_MODELS` list in order (default: Gemini 2.5 Flash, then Gemini 2.0 Flash), and finally uses the deterministic local router. ADK Web keeps the configured Gemma model by default and uses ADK's HTTP retry policy; set `ADK_MODEL` explicitly if you want to run ADK Web on a Flash fallback model.
 
 ## Data formats
 

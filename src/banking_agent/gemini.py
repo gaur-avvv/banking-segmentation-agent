@@ -38,9 +38,24 @@ def _parse_plan(text: str, source: str) -> dict:
 def _plan_with_gemini(query: str, api_key: str, model: str | None = None) -> dict:
     from google import genai
     client = genai.Client(api_key=api_key)
-    model = model or os.environ.get("GEMINI_MODEL", os.environ.get("LLM_MODEL", "gemma-4-26b-a4b-it"))
-    response = client.models.generate_content(model=model, contents=_prompt(query))
-    return _parse_plan(response.text, f"gemini:{model}")
+    primary = model or os.environ.get("GEMINI_MODEL", os.environ.get("LLM_MODEL", "gemini-2.5-flash"))
+    configured = os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash,gemini-2.0-flash")
+    models = list(dict.fromkeys([primary, *(item.strip() for item in configured.split(",") if item.strip())]))
+    failures = []
+    for candidate in models:
+        try:
+            response = client.models.generate_content(model=candidate, contents=_prompt(query))
+            result = _parse_plan(response.text, f"gemini:{candidate}")
+            if failures:
+                result["fallback_models_tried"] = failures
+            return result
+        except Exception as exc:
+            message = str(exc).upper()
+            transient = any(token in message for token in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "RATE LIMIT", "DEADLINE"))
+            failures.append(candidate)
+            if not transient:
+                raise
+    raise RuntimeError(f"Gemini models unavailable after fallback chain: {', '.join(failures)}")
 
 
 def _plan_with_openai_compatible(query: str, api_key: str, base_url: str, model: str, source: str) -> dict:

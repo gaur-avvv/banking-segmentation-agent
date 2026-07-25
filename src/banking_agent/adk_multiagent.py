@@ -100,38 +100,44 @@ def create_multi_agent_root_agent():
         generation_config = GenerateContentConfig(temperature=0.1, max_output_tokens=512)
     except ImportError:
         generation_config = None
+    try:
+        from google.adk.models import Gemini
+        from google.genai.types import HttpRetryOptions
+        model_ref = Gemini(model=model, retry_options=HttpRetryOptions(initial_delay=1, attempts=3))
+    except ImportError:
+        model_ref = model
     common = {"generate_content_config": generation_config} if generation_config is not None else {}
     eda_agent = Agent(
         name="eda_agent",
-        model=model,
+        model=model_ref,
         description="Profiles local banking data and reports quality metrics.",
         instruction="Call eda_tool for dataset profiling. Never request raw rows in your response.",
         tools=[eda_tool], **common,
     )
     feature_agent = Agent(
         name="feature_engineering_agent",
-        model=model,
+        model=model_ref,
         description="Builds customer-level behavioral features locally.",
         instruction="Call feature_engineering_tool after EDA and summarize engineered columns.",
         tools=[feature_engineering_tool], **common,
     )
     segmentation_agent = Agent(
         name="segmentation_agent",
-        model=model,
+        model=model_ref,
         description="Runs the audited segmentation and evaluation workflow.",
         instruction="Call segmentation_tool with the user dataset path and query. Do not invent metrics.",
         tools=[segmentation_tool], **common,
     )
     explainability_agent = Agent(
         name="explainability_agent",
-        model=model,
+        model=model_ref,
         description="Explains segment rules and proposes policy-safe next actions.",
         instruction="Call explainability_tool for each requested segment and mention human review when needed.",
         tools=[explainability_tool], **common,
     )
     review_explainability_agent = Agent(
         name="governance_explainability_agent",
-        model=model,
+        model=model_ref,
         description="Checks explanations for auditability and human-review needs.",
         instruction="Call explainability_tool and identify any human-review requirement.",
         tools=[explainability_tool], **common,
@@ -149,7 +155,7 @@ def create_multi_agent_root_agent():
     )
     return Agent(
         name="banking_root_router_agent",
-        model=model,
+        model=model_ref,
         description="Routes retail banking queries to specialized ADK agents.",
         instruction=(
             "First call query_route_tool to select the smallest specialist route dynamically. "
