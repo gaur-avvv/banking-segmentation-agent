@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 from typing import Any
@@ -208,6 +209,9 @@ def _adk_web(args: argparse.Namespace) -> None:
     """Launch the official Google ADK developer web UI."""
     if shutil.which("adk") is None:
         raise SystemExit("Google ADK is not installed. Run: pip install -e '.[adk]'")
+    # ADK Web launches the root agent in a child process. Pass the selected
+    # dataset through the environment so every specialist sees the same path.
+    os.environ["BANKING_DATA_PATH"] = args.data_path
     print(f"Starting Google ADK web UI on http://{args.host}:{args.port}")
     subprocess.run(["adk", "web", "--host", args.host, "--port", str(args.port)], check=True)
 

@@ -103,6 +103,13 @@ def create_multi_agent_root_agent():
         name="banking_root_router_agent",
         model=model,
         description="Routes retail banking queries to specialized ADK agents.",
-        instruction="Route the request to analytics_sequential_pipeline. Use governance_review_loop when explanation or human review is requested. Keep banking records local and return structured summaries.",
+        instruction=(
+            "Route every analytics request to analytics_sequential_pipeline. "
+            "Use governance_review_loop when explanation, audit, or human review is requested. "
+            "The dataset path is the path explicitly provided by the user, otherwise BANKING_DATA_PATH, "
+            "otherwise the safe local demo fallback. Never guess banking_data.csv, never ask for the path "
+            "again when a fallback is available, and pass the same data_path to every specialist tool. "
+            "Keep banking records local, do not expose raw rows or credentials, and return structured summaries."
+        ),
         sub_agents=[sequential_pipeline, review_loop],
     )

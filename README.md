@@ -391,12 +391,16 @@ adk web --port 8001
 The equivalent project command checks that Google ADK is installed and launches the same UI:
 
 ```bash
-banking-agent adk-web --host 127.0.0.1 --port 8001
+banking-agent adk-web \\
+  --data-path '/absolute/path/to/bank_transactions.csv' \\
+  --host 127.0.0.1 --port 8001
 ```
 
 Open `http://127.0.0.1:8001` and select `adk_app`. ADK Web is intended for development/debugging; the project's local console remains `banking-agent api`, which displays the deterministic specialist-agent/tool trace.
 
 The local API console at `/ui` includes a dataset selector populated from `/datasets`, plus an optional custom path field. Leave the custom field empty to use the first discovered dataset; if no dataset exists, it uses `data/demo` automatically. This makes a fresh clone immediately runnable in the ADK web UI, terminal, or API without hard-coding `banking_data.csv`.
+
+For ADK Web, `--data-path` is exported as `BANKING_DATA_PATH` before the child ADK process starts. Every specialist therefore receives the same dataset context. A missing path is resolved to the local demo and recorded in the tool result; the root router is instructed not to guess filenames or pause for a path that can be safely resolved.
 
 Run against a folder containing the supported ZIP:
 
