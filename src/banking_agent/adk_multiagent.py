@@ -64,6 +64,18 @@ def _segmentation_result(resolved: str, query: str) -> dict:
     return {"status": "ok", "report": result["report"], "artifacts": result["artifacts"]}
 
 
+def query_route_tool(query: str) -> dict:
+    """Choose the smallest specialist route for a natural-language request."""
+    text = query.lower()
+    governance = any(word in text for word in ("explain", "why", "audit", "review", "basis"))
+    analytics = any(word in text for word in ("segment", "compare", "average", "transaction", "convert", "recommend"))
+    if governance and not analytics:
+        return {"route": "governance_review_loop", "agents": ["governance_explainability_agent"], "reason": "explanation/audit intent"}
+    if analytics:
+        return {"route": "analytics_sequential_pipeline", "agents": ["eda_agent", "feature_engineering_agent", "segmentation_agent", "explainability_agent"], "reason": "data/segmentation intent"}
+    return {"route": "analytics_sequential_pipeline", "agents": ["eda_agent", "feature_engineering_agent"], "reason": "safe exploratory fallback"}
+
+
 def explainability_tool(segment: str) -> dict:
     """Return policy-safe explanations and next actions for a segment."""
     profiles = {
@@ -140,7 +152,8 @@ def create_multi_agent_root_agent():
         model=model,
         description="Routes retail banking queries to specialized ADK agents.",
         instruction=(
-            "Route dynamically by intent: segmentation/comparison/recommendation uses analytics_sequential_pipeline; "
+            "First call query_route_tool to select the smallest specialist route dynamically. "
+            "Segmentation/comparison/recommendation uses analytics_sequential_pipeline; "
             "explanation, audit, or human review uses governance_review_loop (and analytics only if needed). "
             "The dataset path is the path explicitly provided by the user, otherwise BANKING_DATA_PATH, "
             "otherwise the safe local demo fallback. Never guess banking_data.csv, never ask for the path "
@@ -149,5 +162,14 @@ def create_multi_agent_root_agent():
             "Reuse tool results when cache_hit is true; do not call the same tool twice for an unchanged path/query."
         ),
         **common,
+        tools=[query_route_tool],
         sub_agents=[sequential_pipeline, review_loop],
     )
+
+
+def create_dynamic_agent(query: str):
+    """Create a query-scoped ADK root with only the selected route enabled."""
+    root = create_multi_agent_root_agent()
+    route = query_route_tool(query)["route"]
+    root.sub_agents = [agent for agent in root.sub_agents if agent.name == route]
+    return root

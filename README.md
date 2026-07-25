@@ -12,6 +12,7 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
 - [Configuration](#configuration)
 - [Data formats](#data-formats)
 - [Run the agent](#run-the-agent)
+- [Dynamic agent routing](#dynamic-agent-routing)
 - [Dynamic dataset paths and API](#http-api)
 - [ML lifecycle](#ml-lifecycle)
 - [Determinism and fallbacks](#determinism-and-fallbacks)
@@ -95,7 +96,7 @@ Install Python **3.10 or newer** and Git. For datasets around one million rows, 
 ### Clone and install
 
 ```bash
-git clone https://github.com/YOUR-ACCOUNT/banking-segmentation-agent.git
+git clone https://github.com/gaur-avvv/banking-segmentation-agent.git
 cd banking-segmentation-agent
 python -m venv .venv
 ```
@@ -141,6 +142,46 @@ banking-agent adk-web --data-path /mnt/c/Users/Dell/Downloads/Compressed/bank_tr
 ```
 
 In WSL, Windows drives use `/mnt/c/...`; do not use `mnt\\c\\...`. If `banking-agent: command not found` appears, use `uv run banking-agent ...` or activate `.venv` first.
+
+### OS-specific command reference
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+export GEMINI_API_KEY="your-key"
+banking-agent setup
+banking-agent chat
+banking-agent api --host 127.0.0.1 --port 8000
+banking-agent adk-web --provider gemini --model gemma-4-26b-a4b-it --port 8001
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+$env:GEMINI_API_KEY = "your-key"
+banking-agent setup
+banking-agent adk-web --data-path "C:\Users\Dell\Downloads\Compressed\bank_transactions.csv" --port 8001
+```
+
+Windows Command Prompt:
+
+```bat
+.venv\Scripts\activate.bat
+set GEMINI_API_KEY=your-key
+banking-agent run --data-path "C:\Users\Dell\Downloads\Compressed\bank_transactions.csv" --query "Compare transaction sizes"
+```
+
+WSL:
+
+```bash
+source .venv/bin/activate
+export GEMINI_API_KEY="your-key"
+banking-agent adk-web --data-path /mnt/c/Users/Dell/Downloads/Compressed/bank_transactions.csv --port 8001
+```
+
+If the console script is unavailable, prefix the command with `uv run` (for example, `uv run banking-agent chat`).
 
 If your OS-managed Python cannot create environments, install its `venv` package or use [uv](https://docs.astral.sh/uv/):
 
@@ -392,6 +433,28 @@ The request may override the server's default path:
 ```
 
 The API returns the same final report, event trace, leakage audit, fit diagnostics, recommendations, and artifact paths as the terminal CLI.
+
+### Dynamic agent routing
+
+The ADK root agent first calls `query_route_tool`. It normalizes the user query and activates the smallest useful route:
+
+| Query pattern | Dynamic route |
+| --- | --- |
+| Segment, compare, average, recommend, convert | EDA → feature engineering → segmentation → explanation |
+| Explain, why, audit, basis, review | Governance/explainability review |
+| Unknown or ambiguous | Safe EDA/feature exploration fallback |
+
+The Python API is also available for applications that want to inspect the route before creating an agent:
+
+```python
+from banking_agent.adk_multiagent import create_dynamic_agent, query_route_tool
+
+query = "Why were priority customers selected?"
+print(query_route_tool(query))
+agent = create_dynamic_agent(query)
+```
+
+The route is deterministic, local, and cache-aware. Repeated unchanged tool calls reuse the local TTL cache. ADK Web streams transfers, tool calls, and structured results; it does not expose private chain-of-thought.
 
 ### A2A and Google ADK
 
