@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 from .agent import run_agent
 from .adk_adapter import adk_status
@@ -30,8 +31,8 @@ WEB_UI = """<!doctype html>
 <body><h1>Banking Segmentation Agent</h1><p class='muted'>Multi-agent trace, tool calls, governance checks, and JSON output.</p>
 <textarea id='query'>Segment customers into priority, regular, and dormant groups and find conversion candidates</textarea>
 <div class='grid'><label>Dataset<br><select id='dataset'><option value=''>Loading available datasets...</option></select><br><input id='path' placeholder='Optional custom CSV, ZIP, or folder path'></label><label>Provider<br><input id='provider' placeholder='none, gemini, openrouter, groq, ollama'></label></div>
-<button onclick='run()'>Run agent</button><div id='status' class='panel'>Idle</div><div class='panel'><h2>Agent/tool calls</h2><div id='events'></div></div><div class='panel'><h2>Final JSON response</h2><pre id='json'>{}</pre></div>
-<script>async function loadDatasets(){try{const r=await fetch('/datasets');const items=await r.json();const select=document.getElementById('dataset');select.innerHTML='';items.forEach((item,i)=>{const o=document.createElement('option');o.value=item.path;o.textContent=item.name+(i===0?' (default)':'');select.appendChild(o)})}catch(e){document.getElementById('dataset').innerHTML='<option value="">Automatic demo fallback</option>'}}async function run(){const q=document.getElementById('query').value,custom=document.getElementById('path').value.trim(),path=custom||document.getElementById('dataset').value||null,provider=document.getElementById('provider').value||null;document.getElementById('events').innerHTML='';document.getElementById('json').textContent='';document.getElementById('status').textContent='Running...';const res=await fetch('/run/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,data_path:path,provider:provider})});const reader=res.body.getReader(),decoder=new TextDecoder();let buffer='';while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;const item=JSON.parse(line.slice(5));if(item.type==='agent_tool_call'){const el=document.createElement('div');el.className='event';el.innerHTML='<b>'+item.agent+'</b> → <b>'+item.tool+'</b><br><span class="muted">'+item.detail+'</span>';document.getElementById('events').appendChild(el)}if(item.type==='final'){document.getElementById('json').textContent=JSON.stringify(item.result,null,2);document.getElementById('status').textContent='Completed'}}}}}loadDatasets();</script></body></html>"""
+<button onclick='run()'>Run agent</button><div id='status' class='panel'>Idle</div><div class='panel'><h2>Agent/tool calls</h2><div id='events'></div></div><div class='panel'><h2>Visualizations</h2><div id='images'></div></div><div class='panel'><h2>Final JSON response</h2><pre id='json'>{}</pre></div>
+<script>async function loadDatasets(){try{const r=await fetch('/datasets');const items=await r.json();const select=document.getElementById('dataset');select.innerHTML='';items.forEach((item,i)=>{const o=document.createElement('option');o.value=item.path;o.textContent=item.name+(i===0?' (default)':'');select.appendChild(o)})}catch(e){document.getElementById('dataset').innerHTML='<option value="">Automatic demo fallback</option>'}}async function run(){const q=document.getElementById('query').value,custom=document.getElementById('path').value.trim(),path=custom||document.getElementById('dataset').value||null,provider=document.getElementById('provider').value||null;document.getElementById('events').innerHTML='';document.getElementById('images').innerHTML='';document.getElementById('json').textContent='';document.getElementById('status').textContent='Running...';const res=await fetch('/run/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,data_path:path,provider:provider})});const reader=res.body.getReader(),decoder=new TextDecoder();let buffer='';while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;const item=JSON.parse(line.slice(5));if(item.type==='agent_tool_call'){const el=document.createElement('div');el.className='event';el.innerHTML='<b>'+item.agent+'</b> → <b>'+item.tool+'</b><br><span class="muted">'+item.detail+'</span>';document.getElementById('events').appendChild(el)}if(item.type==='final'){document.getElementById('json').textContent=JSON.stringify(item.result,null,2);(item.result.artifacts||[]).filter(p=>p.toLowerCase().endsWith('.png')).forEach(p=>{const img=document.createElement('img');img.src='/artifact?path='+encodeURIComponent(p);img.alt=p;img.style='max-width:100%;margin:8px;border-radius:8px';document.getElementById('images').appendChild(img)});document.getElementById('status').textContent='Completed'}}}}}loadDatasets();</script></body></html>"""
 
 
 def create_app(default_data_path: str = "data") -> FastAPI:
@@ -50,6 +51,16 @@ def create_app(default_data_path: str = "data") -> FastAPI:
         # Ensure a clone always has one safe selectable default.
         resolve_dataset_path(default_data_path)
         return discover_dataset_paths()
+
+    @app.get("/artifact")
+    def artifact(path: str) -> FileResponse:
+        """Serve only generated PNGs below an artifacts directory to the local UI."""
+        candidate = Path(path).expanduser().resolve()
+        if candidate.suffix.lower() != ".png" or "artifacts" not in candidate.parts:
+            raise HTTPException(status_code=403, detail="Only generated PNG artifacts are available")
+        if not candidate.is_file():
+            raise HTTPException(status_code=404, detail="Artifact not found")
+        return FileResponse(candidate, media_type="image/png", filename=candidate.name)
 
     @app.get("/.well-known/agent.json")
     def agent_card() -> dict[str, Any]:

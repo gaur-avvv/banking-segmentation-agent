@@ -412,7 +412,7 @@ Open the browser console:
 http://127.0.0.1:8000/ui
 ```
 
-The console displays specialist-agent calls (`data_quality_agent`, `feature_agent`, `model_agent`, `governance_agent`, `recommendation_agent`, and `visualization_agent`), tool names, details, and the final JSON response.
+The console displays specialist-agent calls (`data_quality_agent`, `feature_agent`, `model_agent`, `governance_agent`, `recommendation_agent`, and `visualization_agent`), tool names, details, generated PNG visualizations inline, and the final JSON response. PNGs are served only from generated `artifacts/` directories through the local `/artifact` endpoint.
 
 Check health and run a query:
 
