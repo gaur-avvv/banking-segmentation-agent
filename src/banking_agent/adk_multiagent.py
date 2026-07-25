@@ -78,6 +78,16 @@ def query_route_tool(query: str) -> dict:
 
 def explainability_tool(segment: str) -> dict:
     """Return policy-safe explanations and next actions for a segment."""
+    text = segment.lower()
+    # Accept a natural-language explanation query, not only a bare label.
+    if "priority" in text:
+        segment = "priority"
+    elif "regular" in text:
+        segment = "regular"
+    elif "dormant" in text:
+        segment = "dormant"
+    elif "review" in text or "unknown" in text:
+        segment = "needs_review"
     profiles = {
         "priority": {"basis": "High maintained balance and transaction frequency.", "action": "Review relationship expansion and savings/rewards opportunities."},
         "regular": {"basis": "Active behavior below the training-derived priority thresholds.", "action": "Consider balance-building and engagement actions."},
@@ -159,7 +169,8 @@ def create_multi_agent_root_agent():
             model=model_ref,
             description="Stable single-instruction banking router for uninterrupted ADK chat.",
             instruction=(
-                "Use query_route_tool first, then call only the required local tools. "
+                "Use a concise ReAct loop: state the goal internally, call query_route_tool, observe its structured result, "
+                "then call only the required local tools and use each observation to choose the next action. "
                 "For analytics call eda_tool, feature_engineering_tool, and segmentation_tool as needed. "
                 "For explanations call explainability_tool. Keep all records local, return concise structured summaries, "
                 "and never expose credentials or private chain-of-thought. Reuse cache_hit results."
@@ -172,7 +183,8 @@ def create_multi_agent_root_agent():
         model=model_ref,
         description="Routes retail banking queries to specialized ADK agents.",
         instruction=(
-            "First call query_route_tool to select the smallest specialist route dynamically. "
+            "Use a concise ReAct loop: first call query_route_tool, observe its route, transfer to the smallest specialist route, "
+            "observe each structured tool result, and stop when the requested output is complete. "
             "Segmentation/comparison/recommendation uses analytics_sequential_pipeline; "
             "explanation, audit, or human review uses governance_review_loop (and analytics only if needed). "
             "The dataset path is the path explicitly provided by the user, otherwise BANKING_DATA_PATH, "
