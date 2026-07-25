@@ -30,6 +30,8 @@ class AgentState(TypedDict, total=False):
     user_id: str
     memory_store: object
     memory_profile: object
+    llm_provider: str
+    llm_model: str
 
 
 def event(state: AgentState, step: str, detail: str) -> dict:
@@ -39,7 +41,7 @@ def event(state: AgentState, step: str, detail: str) -> dict:
 def load_and_validate(state: AgentState):
     frames = load_dataset(state["data_dir"])
     _, cleaning_audit = clean_and_filter_events(frames)
-    plan = plan_query_with_gemini(state["query"])
+    plan = plan_query_with_gemini(state["query"], state.get("llm_provider"), state.get("llm_model"))
     profile = None
     if state.get("memory_store") and state.get("user_id"):
         profile = state["memory_store"].build_profile(state["user_id"])
@@ -116,9 +118,9 @@ def build_graph():
     return graph.compile()
 
 
-def run_agent(data_dir: str, query: str, user_id: str | None = None, memory_db: str | None = None, memory_consent: bool = False) -> dict:
+def run_agent(data_dir: str, query: str, user_id: str | None = None, memory_db: str | None = None, memory_consent: bool = False, llm_provider: str | None = None, llm_model: str | None = None) -> dict:
     memory_store = SQLiteMemoryStore(memory_db) if memory_db else None
-    result = build_graph().invoke({"data_dir": data_dir, "query": query, "events": [], "user_id": user_id, "memory_store": memory_store})
+    result = build_graph().invoke({"data_dir": data_dir, "query": query, "events": [], "user_id": user_id, "memory_store": memory_store, "llm_provider": llm_provider, "llm_model": llm_model})
     out = Path(data_dir).parent / "artifacts"
     out.mkdir(exist_ok=True)
     result["report"]["data_path"] = str(Path(data_dir).expanduser())

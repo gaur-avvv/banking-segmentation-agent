@@ -7,6 +7,13 @@ from typing import Any
 from .agent import run_agent
 
 
+def _resolve_data_path(args: argparse.Namespace) -> str:
+    if not args.demo:
+        return args.data_path
+    from .demo import ensure_demo_data
+    return str(ensure_demo_data(f"{args.data_path}/demo"))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the banking segmentation agent or open its terminal chat"
@@ -38,8 +45,19 @@ def _parser() -> argparse.ArgumentParser:
         default="on",
         help="Show the agent event trace in chat mode (default: on)",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Generate and use a small non-sensitive demo dataset when no external dataset is available",
+    )
     parser.add_argument("--host", default="127.0.0.1", help="API bind host (api mode only)")
     parser.add_argument("--port", type=int, default=8000, help="API bind port (api mode only)")
+    parser.add_argument(
+        "--provider",
+        choices=("auto", "gemini", "openrouter", "groq", "openai", "openai-compatible", "ollama", "none"),
+        help="Override LLM_PROVIDER for this run",
+    )
+    parser.add_argument("--model", help="Override the provider model for this run")
     return parser
 
 
@@ -119,6 +137,7 @@ def _chat(args: argparse.Namespace) -> None:
     print("Banking Segmentation Agent — terminal chat")
     print("Type /help for commands or /quit to exit.")
     show_trace = args.trace == "on"
+    data_path = _resolve_data_path(args)
     last_result: dict[str, Any] | None = None
 
     while True:
@@ -159,11 +178,13 @@ def _chat(args: argparse.Namespace) -> None:
         print("\nRunning the agent: planning → validation → features → evaluation → recommendations")
         try:
             last_result = run_agent(
-                args.data_path,
+                data_path,
                 query,
                 args.user_id,
                 args.memory_db,
                 args.memory_consent,
+                args.provider,
+                args.model,
             )
             _print_summary(last_result, show_trace=show_trace)
         except Exception as exc:  # Keep the REPL alive for the next query.
@@ -176,8 +197,9 @@ def _api(args: argparse.Namespace) -> None:
         from .api import create_app
     except ImportError as exc:
         raise SystemExit("API dependencies are missing. Install with: pip install -e '.[dev]'") from exc
-    print(f"Starting API on http://{args.host}:{args.port} using dataset path: {args.data_path}")
-    uvicorn.run(create_app(args.data_path), host=args.host, port=args.port)
+    data_path = _resolve_data_path(args)
+    print(f"Starting API on http://{args.host}:{args.port} using dataset path: {data_path}")
+    uvicorn.run(create_app(data_path), host=args.host, port=args.port)
 
 
 def main() -> None:
@@ -188,9 +210,10 @@ def main() -> None:
     if args.command == "api":
         _api(args)
         return
+    data_path = _resolve_data_path(args)
     print(
         json.dumps(
-            run_agent(args.data_path, args.query, args.user_id, args.memory_db, args.memory_consent),
+            run_agent(data_path, args.query, args.user_id, args.memory_db, args.memory_consent, args.provider, args.model),
             indent=2,
             default=str,
         )

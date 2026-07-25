@@ -14,6 +14,8 @@ class RunRequest(BaseModel):
     user_id: str | None = None
     memory_db: str | None = None
     memory_consent: bool = False
+    provider: str | None = None
+    model: str | None = None
 
 
 def create_app(default_data_path: str = "data") -> FastAPI:
@@ -32,6 +34,8 @@ def create_app(default_data_path: str = "data") -> FastAPI:
                 request.user_id,
                 request.memory_db,
                 request.memory_consent,
+                request.provider,
+                request.model,
             )
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -137,7 +137,53 @@ GEMINI_API_KEY=replace-with-your-new-key
 GEMINI_MODEL=gemma-4-26b-a4b-it
 ```
 
-Gemma provides planning assistance; LangGraph executes the deterministic workflow. If the key is absent, quota-limited, or produces invalid JSON, the agent logs the reason and uses its local router.
+Provider selection is automatic by default. Gemini is preferred when `GEMINI_API_KEY` exists, followed by OpenRouter, Groq, and OpenAI-compatible providers. A local Ollama model can be selected explicitly without a cloud key. You may select explicitly:
+
+```dotenv
+LLM_PROVIDER=auto          # auto, gemini, openai, openai-compatible, or none
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=           # optional OpenRouter/local compatible endpoint
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openrouter/free
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.3-70b-versatile
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=gemma3:4b
+```
+
+Shell examples:
+
+```bash
+export GEMINI_API_KEY="your-gemini-key"
+export GEMINI_MODEL="gemma-4-26b-a4b-it"
+# or
+export OPENAI_API_KEY="your-openai-key"
+export OPENAI_MODEL="gpt-4o-mini"
+# OpenRouter's free router (availability and limits change):
+export OPENROUTER_API_KEY="your-openrouter-key"
+export OPENROUTER_MODEL="openrouter/free"
+# Groq:
+export GROQ_API_KEY="your-groq-key"
+# Local Ollama:
+ollama pull gemma3:4b
+export OLLAMA_MODEL="gemma3:4b"
+```
+
+PowerShell:
+
+```powershell
+$env:GEMINI_API_KEY = "your-gemini-key"
+# or
+$env:OPENAI_API_KEY = "your-openai-key"
+# or
+$env:OPENROUTER_API_KEY = "your-openrouter-key"
+# or choose local Ollama
+$env:LLM_PROVIDER = "ollama"
+$env:OLLAMA_MODEL = "gemma3:4b"
+```
+
+Only the query is sent to the selected planner; banking records remain local. OpenRouter's `openrouter/free` router and `:free` model variants are subject to changing availability and rate limits; Groq free quotas also depend on the account and model. Ollama runs locally. If keys are absent, quota-limited, or produce invalid JSON, the agent logs the reason and uses its deterministic local router. API keys must never be committed or pasted into chat.
 
 ## Data formats
 
@@ -196,6 +242,23 @@ Generate synthetic demo data:
 python scripts/generate_sample_data.py
 banking-agent run --data-path data --query "Segment customers and find priority candidates"
 ```
+
+Select a provider/model per command without editing `.env`:
+
+```bash
+banking-agent run --data-path data --provider openrouter --model openrouter/free \
+  --query "Compare transaction sizes"
+banking-agent chat --data-path data --provider ollama --model gemma3:4b
+```
+
+If you cloned the repository without a dataset, run the safe built-in demo:
+
+```bash
+banking-agent run --demo --query "Segment customers into priority, regular, and dormant groups"
+banking-agent chat --demo
+```
+
+The demo creates a small non-sensitive dataset under `data/demo`. The public repository intentionally does not include the Kaggle banking CSV: its listing states “Data files © Original Authors,” and the file contains customer identifiers, demographics, balances, and transaction activity. Download it from the [Kaggle source listing](https://www.kaggle.com/datasets/shivamb/bank-customer-segmentation) only if your use and redistribution rights permit it, then pass its path with `--data-path`.
 
 ### Interactive terminal chat
 
@@ -266,7 +329,9 @@ The request may override the server's default path:
 {
   "data_path": "/absolute/path/to/transactions.csv",
   "query": "Compare average transaction size for priority and regular customers",
-  "memory_consent": false
+  "memory_consent": false,
+  "provider": "ollama",
+  "model": "gemma3:4b"
 }
 ```
 
@@ -395,3 +460,7 @@ The suite covers feature handling, deterministic routing, fallback levels, memor
 - [Gemma model overview](https://ai.google.dev/gemma/docs)
 - [Gemini API model catalogue](https://ai.google.dev/gemini-api/docs/models)
 - [Gemini API pricing and free-tier details](https://ai.google.dev/gemini-api/docs/pricing)
+- [OpenRouter free models router](https://openrouter.ai/docs/guides/routing/routers/free-router)
+- [OpenRouter model catalogue](https://openrouter.ai/docs/guides/overview/models)
+- [Groq OpenAI compatibility](https://console.groq.com/docs/openai)
+- [Ollama OpenAI compatibility](https://github.com/ollama/ollama/blob/main/docs/openai.md)
