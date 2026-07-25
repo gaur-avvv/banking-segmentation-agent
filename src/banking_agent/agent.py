@@ -10,7 +10,7 @@ from langgraph.graph import END, START, StateGraph
 from .config import SegmentationConfig
 from .contracts import data_quality_report, load_dataset
 from .features import build_customer_features, clean_and_filter_events
-from .modeling import assign_rule_segments, chronological_split, cross_validate_stability, derive_rule_thresholds, dimensionality_reduction_snapshot, evaluation_sample, evaluate_unsupervised_models, final_test_report
+from .modeling import assign_rule_segments, chronological_split, cross_validate_stability, derive_rule_thresholds, dimensionality_reduction_snapshot, evaluation_sample, evaluate_unsupervised_models, final_test_report, leakage_audit
 from .recommendations import priority_candidates
 from .gemini import plan_query_with_gemini
 from .memory import MemoryEntry, SQLiteMemoryStore
@@ -70,15 +70,26 @@ def train_and_segment(state: AgentState):
     report = {"determinism": {"random_state": config.random_state, "threshold_source": "training_partition_only", "router": "deterministic_fallback"},
               "split_sizes": {"train": len(train), "validation": len(validation), "test": len(test)},
               "rule_thresholds": thresholds,
-              "unsupervised_validation": {k: {m: v for m, v in score.items() if m not in {"model", "transformer"}} for k, score in model_scores.items()},
+              "unsupervised_validation": {
+                  k: ({m: v for m, v in score.items() if m not in {"model", "transformer"}} if isinstance(score, dict) else score)
+                  for k, score in model_scores.items()
+              },
               "cross_validation": cv, "evaluation_sampling": {"train": len(train_eval), "validation": len(validation_eval)},
               "feature_selection": {"method": "mutual_information", "selected_features": projection["selected_features"]},
               "dimensionality_reduction": {k: v for k, v in projection.items() if k != "coordinates"},
               "final_test": final_test_report(test, config, thresholds)}
+    report["leakage_prevention"] = leakage_audit(train, validation, test, report)
+    report["fit_diagnostics"] = {
+        name: score.get("fit_check", {"status": "not_evaluated"}) if isinstance(score, dict) else {"status": "not_evaluated"}
+        for name, score in model_scores.items()
+    }
     events = state.get("events", []) + [
         {"step": "feature_selection", "detail": f"Selected {len(projection['selected_features'])} features using mutual information on training data."},
         {"step": "dimensionality_reduction", "detail": f"Projected {projection['projected_rows']} customers to 2 PCA components fitted on training data."},
-        {"step": "model_evaluation", "detail": "Evaluated K-Means/GMM on validation; deployed auditable rule baseline without tuning on test data."},
+        {"step": "hyperparameter_tuning", "detail": "Auto-tuned K-Means/GMM candidates on training/validation only."},
+        {"step": "fit_diagnostics", "detail": "Compared train/validation silhouette to flag overfitting or underfitting risk."},
+        {"step": "leakage_audit", "detail": f"Leakage prevention audit: {report['leakage_prevention']['status']}."},
+        {"step": "model_evaluation", "detail": "Evaluated tuned K-Means/GMM on validation; deployed auditable rule baseline without tuning on test data."},
     ]
     return {"segmented": segmented, "thresholds": thresholds, "report": report, "projection": projection["coordinates"], "events": events}
 

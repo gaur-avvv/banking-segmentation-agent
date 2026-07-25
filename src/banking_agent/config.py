@@ -13,3 +13,6 @@ class SegmentationConfig:
     cv_folds: int = 5
     min_segment_size: int = 10
     max_evaluation_customers: int = 25_000
+    cluster_candidates: tuple[int, ...] = (2, 3, 4, 5)
+    overfit_gap_threshold: float = 0.15
+    low_silhouette_threshold: float = 0.10

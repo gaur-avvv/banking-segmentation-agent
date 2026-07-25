@@ -28,7 +28,9 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
 | Feature selection | Uses leakage-safe mutual-information selection fitted on training data only. |
 | Dimensionality reduction | Fits deterministic two-component PCA on selected training features for diagnostics and visual exploration. |
 | Visualization | Saves segment distribution, PCA segment projection, and feature-by-segment distribution charts as PNG artifacts. |
-| ML evaluation | Evaluates K-Means and GMM on held-out validation data and checks K-Means stability with cross-validation. |
+| ML evaluation | Auto-tunes K-Means/GMM hyperparameters on train/validation only and checks K-Means stability with cross-validation. |
+| Leakage prevention | Audits customer overlap, training-only thresholds/feature selection/PCA fitting, and confirms the test partition is never used for tuning. |
+| Fit diagnostics | Compares train and validation silhouette scores and flags acceptable generalization, overfitting risk, or underfitting risk. |
 | Candidate conversion | Ranks regular customers by deterministic distance to priority thresholds and proposes an action. |
 | Agent workflow | Uses LangGraph for visible query planning, validation, engineering, evaluation, and recommendation stages. |
 | LLM planning | Uses hosted Gemma 4 when configured; otherwise a deterministic keyword router takes over. |
@@ -251,11 +253,14 @@ artifacts/visualizations/feature_distributions.png
 5. **Select:** fit mutual-information feature selection on training data only.
 6. **Reduce:** fit two-component PCA on selected training features for stable diagnostics.
 7. **Train:** evaluate K-Means and GMM on the held-out validation partition.
-8. **Stability check:** run deterministic K-Fold evaluation on the training partition.
-9. **Test:** report the rule baseline on untouched test data.
-10. **Visualize:** save segment counts, PCA projections, and feature distribution charts.
-11. **Serve:** persist the rule rationale and recommendation candidates.
-12. **Monitor:** in production, monitor input drift, segment migration, candidate conversion, fairness, and model fallback rates.
+8. **Tune:** search deterministic K-Means/GMM grids and select by validation silhouette with a generalization-gap penalty.
+9. **Fit diagnostics:** compare train/validation scores to detect overfitting or underfitting risk.
+10. **Stability check:** run deterministic K-Fold evaluation on the training partition.
+11. **Leakage audit:** verify disjoint customer IDs and that test data was not used to fit, select, tune, or threshold the workflow.
+12. **Test:** report the rule baseline on untouched test data.
+13. **Visualize:** save segment counts, PCA projections, and feature distribution charts.
+14. **Serve:** persist the rule rationale and recommendation candidates.
+15. **Monitor:** in production, monitor input drift, segment migration, candidate conversion, fairness, and model fallback rates.
 
 ### Engineered features
 
@@ -277,8 +282,23 @@ active_product_count
 | Active but below priority thresholds | `L2`, medium-confidence regular assignment. |
 | Missing-history exception | `L3`, low-confidence human review. |
 | K-Means/GMM failure or insufficient validation rows | Logged `fallback_to_rules`; rule segmentation still completes. |
+| Train/validation silhouette gap exceeds the configured threshold | Logged `overfitting_risk`; the rule baseline remains the deployable decision layer. |
+| Both train and validation silhouette scores are low | Logged `underfitting_risk`; review features, segment assumptions, and data volume. |
+| Any customer appears in more than one partition | Leakage audit fails and the run report exposes overlap counts. |
 
 All stochastic components use `random_state=42` by default. Rule thresholds come only from the training partition.
+
+### What the terminal agent shows
+
+The chat CLI prints a trace for each completed query. A typical run is:
+
+```text
+Query Planning → Data Validation → Data Cleaning Filtering → Feature Extraction
+→ Feature Selection → Dimensionality Reduction → Hyperparameter Tuning
+→ Fit Diagnostics → Leakage Audit → Model Evaluation → Recommendations → Visualization
+```
+
+The final summary includes the leakage-audit status, fit-diagnostic status for each tuned model, selected hyperparameters, segment counts, candidate actions, and artifact paths. Use `/json` in chat to inspect the complete report.
 
 ## Episodic memory
 

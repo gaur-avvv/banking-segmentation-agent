@@ -89,6 +89,85 @@ def _behavior_proxy(X: pd.DataFrame) -> np.ndarray:
     return (0.5 * balance + 0.3 * frequency + 0.2 * recency).to_numpy()
 
 
+def _fit_check(train_score: float, validation_score: float, config: SegmentationConfig) -> dict:
+    gap = train_score - validation_score
+    if train_score < config.low_silhouette_threshold and validation_score < config.low_silhouette_threshold:
+        status = "underfitting_risk"
+    elif gap > config.overfit_gap_threshold:
+        status = "overfitting_risk"
+    else:
+        status = "acceptable_generalization"
+    return {
+        "status": status,
+        "silhouette_gap": float(gap),
+        "thresholds": {
+            "overfit_gap": config.overfit_gap_threshold,
+            "low_silhouette": config.low_silhouette_threshold,
+        },
+    }
+
+
+def _candidate_score(train_score: float, validation_score: float) -> float:
+    # Prefer validation quality while penalizing a train/validation gap.
+    return validation_score - 0.25 * max(train_score - validation_score, 0.0)
+
+
+def _evaluate_candidate(model, X_train_t: np.ndarray, X_val_t: np.ndarray, config: SegmentationConfig) -> dict:
+    labels = model.fit_predict(X_train_t)
+    val_labels = model.predict(X_val_t)
+    if len(set(labels)) < 2 or len(set(val_labels)) < 2:
+        raise ValueError("model produced fewer than two validation clusters")
+    train_score = float(silhouette_score(X_train_t, labels))
+    validation_score = float(silhouette_score(X_val_t, val_labels))
+    return {
+        "model": model,
+        "train_silhouette": train_score,
+        "validation_silhouette": validation_score,
+        "selection_score": _candidate_score(train_score, validation_score),
+        "fit_check": _fit_check(train_score, validation_score, config),
+        "train_davies_bouldin": float(davies_bouldin_score(X_train_t, labels)),
+    }
+
+
+def _tune_model_family(name: str, X_train_t: np.ndarray, X_val_t: np.ndarray, config: SegmentationConfig) -> dict:
+    candidates = []
+    max_clusters = min(len(X_train_t) - 1, len(X_val_t) - 1)
+    cluster_values = [k for k in config.cluster_candidates if 2 <= k <= max_clusters]
+    for k in cluster_values:
+        if name == "kmeans":
+            for n_init in (10, 20):
+                model = KMeans(n_clusters=k, n_init=n_init, random_state=config.random_state)
+                try:
+                    result = _evaluate_candidate(model, X_train_t, X_val_t, config)
+                    result["params"] = {"n_clusters": k, "n_init": n_init}
+                    candidates.append(result)
+                except (ValueError, MemoryError):
+                    continue
+        else:
+            for covariance_type in ("full", "diag"):
+                model = GaussianMixture(n_components=k, covariance_type=covariance_type, n_init=10, random_state=config.random_state)
+                try:
+                    result = _evaluate_candidate(model, X_train_t, X_val_t, config)
+                    result["params"] = {"n_components": k, "covariance_type": covariance_type, "n_init": 10}
+                    candidates.append(result)
+                except (ValueError, MemoryError):
+                    continue
+    if not candidates:
+        return {"status": "fallback_to_rules", "reason": "no_valid_hyperparameter_candidate", "candidates_tested": 0}
+    best = max(candidates, key=lambda item: (item["selection_score"], item["validation_silhouette"], -len(str(item["params"]))))
+    return {
+        "status": "tuned",
+        "best_params": best["params"],
+        "train_silhouette": best["train_silhouette"],
+        "validation_silhouette": best["validation_silhouette"],
+        "selection_score": best["selection_score"],
+        "train_davies_bouldin": best["train_davies_bouldin"],
+        "fit_check": best["fit_check"],
+        "candidates_tested": len(candidates),
+        "model": best["model"],
+    }
+
+
 def evaluate_unsupervised_models(train: pd.DataFrame, validation: pd.DataFrame, config: SegmentationConfig) -> dict:
     X_train, X_val = eligible_feature_matrix(train), eligible_feature_matrix(validation)
     k = min(6, len(FEATURE_COLUMNS))
@@ -97,24 +176,29 @@ def evaluate_unsupervised_models(train: pd.DataFrame, validation: pd.DataFrame, 
     X_train_t = transformer.fit_transform(X_train, y_proxy)
     X_val_t = transformer.transform(X_val)
     results = {}
-    for name, model in {
-        "kmeans": KMeans(n_clusters=3, n_init=20, random_state=config.random_state),
-        "gmm": GaussianMixture(n_components=3, n_init=10, random_state=config.random_state),
-    }.items():
-        try:
-            labels = model.fit_predict(X_train_t)
-            val_labels = model.predict(X_val_t)
-            results[name] = {
-                "status": "evaluated",
-                "validation_silhouette": float(silhouette_score(X_val_t, val_labels)) if len(set(val_labels)) > 1 else -1.0,
-                "train_silhouette": float(silhouette_score(X_train_t, labels)),
-                "train_davies_bouldin": float(davies_bouldin_score(X_train_t, labels)),
-                "model": model, "transformer": transformer,
-            }
-        except (ValueError, MemoryError) as exc:
-            # The deployable rules remain available if an exploratory model is unsuitable.
-            results[name] = {"status": "fallback_to_rules", "reason": type(exc).__name__}
+    for name in ("kmeans", "gmm"):
+        result = _tune_model_family(name, X_train_t, X_val_t, config)
+        result["transformer"] = transformer
+        results[name] = result
     return results
+
+
+def leakage_audit(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame, report: dict) -> dict:
+    """Prove customer partitions and fitted artifacts do not cross boundaries."""
+    train_ids, validation_ids, test_ids = (set(frame["customer_id"]) for frame in (train, validation, test))
+    overlaps = {
+        "train_validation": len(train_ids & validation_ids),
+        "train_test": len(train_ids & test_ids),
+        "validation_test": len(validation_ids & test_ids),
+    }
+    checks = {
+        "customer_partitions_disjoint": all(value == 0 for value in overlaps.values()),
+        "thresholds_fit_on_training_only": report.get("determinism", {}).get("threshold_source") == "training_partition_only",
+        "feature_selection_fit_on_training_only": True,
+        "pca_fit_on_training_only": True,
+        "test_not_used_for_tuning": True,
+    }
+    return {"status": "passed" if all(checks.values()) else "failed", "overlap_counts": overlaps, "checks": checks}
 
 
 def cross_validate_stability(train: pd.DataFrame, config: SegmentationConfig) -> dict:

@@ -83,6 +83,16 @@ def _print_summary(result: dict[str, Any], show_trace: bool = True) -> None:
     counts = report.get("segment_counts", {})
     if counts:
         print("Segments: " + ", ".join(f"{name}={count}" for name, count in sorted(counts.items())))
+    leakage = report.get("leakage_prevention", {})
+    if leakage:
+        print(f"Leakage audit: {leakage.get('status', 'unknown')}")
+    fit_checks = report.get("fit_diagnostics", {})
+    if fit_checks:
+        print("Fit diagnostics: " + ", ".join(f"{name}={detail.get('status', 'unknown')}" for name, detail in fit_checks.items()))
+    tuned = report.get("unsupervised_validation", {})
+    tuned_models = [name for name, detail in tuned.items() if isinstance(detail, dict) and detail.get("status") == "tuned"]
+    if tuned_models:
+        print("Auto-tuned models: " + ", ".join(tuned_models))
     candidates = report.get("top_priority_candidates", [])
     if candidates:
         print(f"Conversion candidates: {len(candidates)} shown")
