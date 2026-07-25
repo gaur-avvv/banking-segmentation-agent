@@ -40,6 +40,25 @@ if [[ -t 0 ]]; then
     printf '\nBANKING_DATA_PATH=%s\n' "$DATASET_PATH" >> .env
     echo "Saved dataset path in .env"
   fi
+  echo "Choose provider: 1) Gemini  2) OpenRouter  3) Groq  4) OpenAI  5) Ollama  6) None"
+  read -r -p "Provider [1]: " PROVIDER_CHOICE
+  case "${PROVIDER_CHOICE:-1}" in
+    2) PROVIDER=openrouter; KEY_NAME=OPENROUTER_API_KEY ;;
+    3) PROVIDER=groq; KEY_NAME=GROQ_API_KEY ;;
+    4) PROVIDER=openai; KEY_NAME=OPENAI_API_KEY ;;
+    5) PROVIDER=ollama; KEY_NAME= ;;
+    6) PROVIDER=none; KEY_NAME= ;;
+    *) PROVIDER=gemini; KEY_NAME=GEMINI_API_KEY ;;
+  esac
+  sed -i '/^LLM_PROVIDER=/d' .env
+  printf 'LLM_PROVIDER=%s\n' "$PROVIDER" >> .env
+  if [[ -n "$KEY_NAME" ]]; then
+    read -r -s -p "Enter $KEY_NAME (hidden): " API_KEY; echo
+    if [[ -n "$API_KEY" ]]; then
+      sed -i "/^${KEY_NAME}=/d" .env
+      printf '%s=%s\n' "$KEY_NAME" "$API_KEY" >> .env
+    fi
+  fi
 fi
 
 echo "Setup complete. Examples:"

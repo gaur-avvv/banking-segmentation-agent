@@ -28,6 +28,20 @@ if ($datasetPath) {
     Write-Host "Saved dataset path in .env"
 }
 
+Write-Host "Choose provider: 1) Gemini  2) OpenRouter  3) Groq  4) OpenAI  5) Ollama  6) None"
+$providerChoice = Read-Host "Provider [1]"
+$provider = switch ($providerChoice) { "2" { "openrouter" } "3" { "groq" } "4" { "openai" } "5" { "ollama" } "6" { "none" } default { "gemini" } }
+$keyName = switch ($provider) { "gemini" { "GEMINI_API_KEY" } "openrouter" { "OPENROUTER_API_KEY" } "groq" { "GROQ_API_KEY" } "openai" { "OPENAI_API_KEY" } default { "" } }
+$lines = Get-Content .env | Where-Object { $_ -notmatch '^LLM_PROVIDER=' -and ($keyName -eq "" -or $_ -notmatch "^$keyName=") }
+$lines += "LLM_PROVIDER=$provider"
+if ($keyName) {
+    $secure = Read-Host "Enter $keyName (hidden)" -AsSecureString
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+    if ($plain) { $lines += "$keyName=$plain" }
+}
+$lines | Set-Content .env
+
 Write-Host "Setup complete. Examples:"
 Write-Host "  uv run banking-agent setup"
 Write-Host "  uv run banking-agent chat"

@@ -13,6 +13,18 @@ if not "%DATASET_PATH%"=="" (
   echo BANKING_DATA_PATH=%DATASET_PATH%>>.env.tmp
   move /Y .env.tmp .env >nul
 )
+echo Choose provider: 1=Gemini 2=OpenRouter 3=Groq 4=OpenAI 5=Ollama 6=None
+set /p PROVIDER_CHOICE=Provider [1]:
+if "%PROVIDER_CHOICE%"=="2" (set PROVIDER=openrouter&set KEY_NAME=OPENROUTER_API_KEY) else if "%PROVIDER_CHOICE%"=="3" (set PROVIDER=groq&set KEY_NAME=GROQ_API_KEY) else if "%PROVIDER_CHOICE%"=="4" (set PROVIDER=openai&set KEY_NAME=OPENAI_API_KEY) else if "%PROVIDER_CHOICE%"=="5" (set PROVIDER=ollama&set KEY_NAME=) else if "%PROVIDER_CHOICE%"=="6" (set PROVIDER=none&set KEY_NAME=) else (set PROVIDER=gemini&set KEY_NAME=GEMINI_API_KEY)
+findstr /v /b "LLM_PROVIDER=" .env > .env.tmp
+echo LLM_PROVIDER=%PROVIDER%>>.env.tmp
+if defined KEY_NAME (
+  set /p API_KEY=Enter %KEY_NAME% (input will be visible in CMD; use PowerShell for hidden entry):
+  findstr /v /b "%KEY_NAME%=" .env.tmp > .env.tmp2
+  echo %KEY_NAME%=%API_KEY%>>.env.tmp2
+  move /Y .env.tmp2 .env.tmp >nul
+)
+move /Y .env.tmp .env >nul
 echo Setup complete.
 echo Run: .venv\Scripts\banking-agent.exe setup
 echo Run: .venv\Scripts\banking-agent.exe adk-web --port 8001

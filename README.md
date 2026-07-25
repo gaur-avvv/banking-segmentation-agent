@@ -117,7 +117,7 @@ bash scripts/setup.sh
 scripts\setup.cmd
 ```
 
-Each script creates/uses `.venv`, installs the development and Google ADK extras, asks for a dataset CSV/ZIP/folder path, saves it as `BANKING_DATA_PATH` in `.env`, creates `.env` from `.env.example` without overwriting existing settings, and prints the next commands. Press Enter at the dataset prompt to use the automatic safe demo fallback. On Linux/macOS/WSL, `uv` is used when available; otherwise standard Python `venv` and `pip` are used.
+Each script creates/uses `.venv`, installs the development and Google ADK extras, asks for a dataset CSV/ZIP/folder path, asks which provider to use, securely prompts for the selected provider key where supported, saves local settings in ignored `.env`, and prints the next commands. Press Enter at the dataset prompt to use the automatic safe demo fallback. Choose Ollama or None to avoid a cloud key. On Linux/macOS/WSL, `uv` is used when available; otherwise standard Python `venv` and `pip` are used.
 
 The setup scripts then offer a numbered start menu: terminal chat, local API/browser UI, Google ADK Web, one-shot segmentation, or exit. Use `--help` for script help:
 

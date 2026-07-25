@@ -11,3 +11,4 @@ artifacts/*
 data/*
 !data/README.md
 !data/.gitkeep
+bank_transactions.csv
