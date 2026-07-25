@@ -119,6 +119,72 @@ scripts\setup.cmd
 
 Each script creates/uses `.venv`, installs the development and Google ADK extras, asks for a dataset CSV/ZIP/folder path, saves it as `BANKING_DATA_PATH` in `.env`, creates `.env` from `.env.example` without overwriting existing settings, and prints the next commands. Press Enter at the dataset prompt to use the automatic safe demo fallback. On Linux/macOS/WSL, `uv` is used when available; otherwise standard Python `venv` and `pip` are used.
 
+The setup scripts then offer a numbered start menu: terminal chat, local API/browser UI, Google ADK Web, one-shot segmentation, or exit. Use `--help` for script help:
+
+```bash
+bash scripts/setup.sh --help
+```
+
+```powershell
+.\scripts\setup.ps1 --help
+```
+
+```bat
+scripts\setup.cmd --help
+```
+
+After setup, the menu options do the following:
+
+1. **Terminal chat** — enter multiple natural-language questions at `banking>`; use `/help`, `/json`, `/last`, `/trace on|off`, and `/quit`.
+2. **Local API + browser UI** — starts `http://127.0.0.1:8000`; open `/ui` to select a dataset, enter a query, watch agent/tool events, and view PNG charts inline.
+3. **Google ADK Web** — starts `http://127.0.0.1:8001`; select `adk_app` to watch root-agent transfers and specialist tool calls.
+4. **One-shot query** — runs a default segmentation request and prints JSON/artifact paths.
+5. **Exit** — leaves setup without starting a service.
+
+You can skip the menu and run commands directly:
+
+```bash
+# Chat
+uv run banking-agent chat --data-path /path/to/transactions.csv
+
+# API and browser UI
+uv run banking-agent api --data-path /path/to/transactions.csv --host 127.0.0.1 --port 8000
+
+# Google ADK Web
+uv run banking-agent adk-web --provider gemini --model gemma-4-26b-a4b-it \\
+  --data-path /path/to/transactions.csv --port 8001
+
+# One-shot query with deterministic local planning
+uv run banking-agent run --provider none --data-path /path/to/transactions.csv \\
+  --query "Which regular customers can be converted to priority?"
+```
+
+For WSL, translate a Windows file path to `/mnt/c/...`:
+
+```bash
+uv run banking-agent api \\
+  --data-path /mnt/c/Users/Dell/Downloads/Compressed/bank_transactions.csv \\
+  --port 8000
+```
+
+For PowerShell, keep the Windows path quoted:
+
+```powershell
+.\.venv\Scripts\banking-agent.exe api `
+  --data-path "C:\Users\Dell\Downloads\Compressed\bank_transactions.csv" `
+  --port 8000
+```
+
+Example questions:
+
+```text
+Segment customers into priority, regular, and dormant groups
+Explain why priority customers were selected
+What is the average transaction size for priority and regular customers?
+Which regular customers can be converted to priority and what should be done?
+Show the balance and transaction-frequency distributions by segment
+```
+
 Manual setup is still available:
 
 ```bash
