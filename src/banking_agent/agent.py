@@ -121,6 +121,7 @@ def run_agent(data_dir: str, query: str, user_id: str | None = None, memory_db: 
     result = build_graph().invoke({"data_dir": data_dir, "query": query, "events": [], "user_id": user_id, "memory_store": memory_store})
     out = Path(data_dir).parent / "artifacts"
     out.mkdir(exist_ok=True)
+    result["report"]["data_path"] = str(Path(data_dir).expanduser())
     result["segmented"].to_csv(out / "customer_segments.csv", index=False)
     projection = result.get("projection")
     visualization_paths = []

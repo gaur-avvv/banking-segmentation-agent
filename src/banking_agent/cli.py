@@ -14,13 +14,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("chat",),
-        help="Use 'chat' for an interactive terminal session; omit for one-shot JSON output",
+        choices=("chat", "api", "run"),
+        help="Use chat for REPL, api for HTTP service, run for one-shot JSON output",
     )
     parser.add_argument(
+        "--data-path",
         "--data-dir",
+        dest="data_path",
         default="data",
-        help="Directory containing the supported CSV files or bank_transactions.csv.zip",
+        help="Any CSV/ZIP file or dataset folder; --data-dir is kept as a compatibility alias",
     )
     parser.add_argument("--query", default="Segment customers and find priority conversion candidates")
     parser.add_argument("--user-id", help="Optional analytics-user ID for consented episodic memory")
@@ -36,6 +38,8 @@ def _parser() -> argparse.ArgumentParser:
         default="on",
         help="Show the agent event trace in chat mode (default: on)",
     )
+    parser.add_argument("--host", default="127.0.0.1", help="API bind host (api mode only)")
+    parser.add_argument("--port", type=int, default=8000, help="API bind port (api mode only)")
     return parser
 
 
@@ -155,7 +159,7 @@ def _chat(args: argparse.Namespace) -> None:
         print("\nRunning the agent: planning → validation → features → evaluation → recommendations")
         try:
             last_result = run_agent(
-                args.data_dir,
+                args.data_path,
                 query,
                 args.user_id,
                 args.memory_db,
@@ -166,14 +170,27 @@ def _chat(args: argparse.Namespace) -> None:
             print(f"Agent error: {exc}")
 
 
+def _api(args: argparse.Namespace) -> None:
+    try:
+        import uvicorn
+        from .api import create_app
+    except ImportError as exc:
+        raise SystemExit("API dependencies are missing. Install with: pip install -e '.[dev]'") from exc
+    print(f"Starting API on http://{args.host}:{args.port} using dataset path: {args.data_path}")
+    uvicorn.run(create_app(args.data_path), host=args.host, port=args.port)
+
+
 def main() -> None:
     args = _parser().parse_args()
     if args.command == "chat":
         _chat(args)
         return
+    if args.command == "api":
+        _api(args)
+        return
     print(
         json.dumps(
-            run_agent(args.data_dir, args.query, args.user_id, args.memory_db, args.memory_consent),
+            run_agent(args.data_path, args.query, args.user_id, args.memory_db, args.memory_consent),
             indent=2,
             default=str,
         )

@@ -12,6 +12,7 @@ An auditable, local-first retail-banking analytics agent. It turns transaction h
 - [Configuration](#configuration)
 - [Data formats](#data-formats)
 - [Run the agent](#run-the-agent)
+- [Dynamic dataset paths and API](#http-api)
 - [ML lifecycle](#ml-lifecycle)
 - [Determinism and fallbacks](#determinism-and-fallbacks)
 - [Episodic memory](#episodic-memory)
@@ -187,11 +188,13 @@ The generated files are ignored by Git. See [data/README.md](data/README.md) for
 
 ## Run the agent
 
+Every command accepts `--data-path` with an absolute or relative path to a CSV, ZIP, or dataset folder. The older `--data-dir` option remains a compatibility alias. The loader detects the canonical four-file format, the supplied `bank_transactions.csv` / ZIP, or a folder containing one transaction CSV/ZIP. Single transaction files support aliases such as `customer_id` / `CustomerID`, `timestamp` / `TransactionDate`, `amount` / `TransactionAmount (INR)`, and `balance` / `CustAccountBalance`. Customer, date/timestamp, and amount are required; missing balance history is safely marked for review.
+
 Generate synthetic demo data:
 
 ```bash
 python scripts/generate_sample_data.py
-banking-agent --data-dir data --query "Segment customers and find priority candidates"
+banking-agent run --data-path data --query "Segment customers and find priority candidates"
 ```
 
 ### Interactive terminal chat
@@ -199,7 +202,7 @@ banking-agent --data-dir data --query "Segment customers and find priority candi
 Use chat mode when you want to ask several questions in one terminal session and see how the agent reached each answer:
 
 ```bash
-banking-agent chat --data-dir data
+banking-agent chat --data-path data
 ```
 
 At the `banking>` prompt, enter questions such as:
@@ -224,11 +227,56 @@ Built-in chat commands:
 
 To use consented local memory in chat, add `--user-id`, `--memory-db`, and `--memory-consent`. The one-shot command remains available for scripts and automation.
 
+Run against a file on Windows PowerShell:
+
+```powershell
+banking-agent run `
+  --data-path 'C:\Users\Dell\Downloads\Compressed\bank_transactions.csv.zip' `
+  --query 'Segment customers into priority, regular, and dormant groups'
+```
+
+Run against a folder on Linux/macOS/WSL:
+
+```bash
+banking-agent run \
+  --data-path /absolute/path/to/dataset-folder \
+  --query "Which regular customers can be converted to priority?"
+```
+
+### HTTP API
+
+Start the local API with a default dataset path:
+
+```bash
+banking-agent api --data-path data --host 127.0.0.1 --port 8000
+```
+
+Check health and run a query:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl -X POST http://127.0.0.1:8000/run \
+  -H "Content-Type: application/json" \
+  -d '{"query":"Which regular customers can be converted to priority?"}'
+```
+
+The request may override the server's default path:
+
+```json
+{
+  "data_path": "/absolute/path/to/transactions.csv",
+  "query": "Compare average transaction size for priority and regular customers",
+  "memory_consent": false
+}
+```
+
+The API returns the same final report, event trace, leakage audit, fit diagnostics, recommendations, and artifact paths as the terminal CLI.
+
 Run against a folder containing the supported ZIP:
 
 ```bash
-banking-agent \
-  --data-dir /path/to/dataset-folder \
+banking-agent run \
+  --data-path /path/to/dataset-folder \
   --query "Which regular customers can be converted to priority?"
 ```
 
