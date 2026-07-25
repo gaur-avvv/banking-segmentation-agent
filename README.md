@@ -165,6 +165,36 @@ python scripts/generate_sample_data.py
 banking-agent --data-dir data --query "Segment customers and find priority candidates"
 ```
 
+### Interactive terminal chat
+
+Use chat mode when you want to ask several questions in one terminal session and see how the agent reached each answer:
+
+```bash
+banking-agent chat --data-dir data
+```
+
+At the `banking>` prompt, enter questions such as:
+
+```text
+Segment customers into priority, regular, and dormant groups
+What is the average transaction size for priority and regular customers?
+Which regular customers can be converted to priority?
+```
+
+After each query, the CLI prints the planned intent, segment counts, candidate actions, artifact paths, and the LangGraph event trace (`planning → validation → features → evaluation → recommendations`). The trace makes fallback behavior and the deterministic workflow visible.
+
+Built-in chat commands:
+
+```text
+/help          Show available commands
+/trace on|off  Toggle the event trace
+/last          Reprint the last summary
+/json          Print the complete last result as JSON
+/quit          Exit the session
+```
+
+To use consented local memory in chat, add `--user-id`, `--memory-db`, and `--memory-consent`. The one-shot command remains available for scripts and automation.
+
 Run against a folder containing the supported ZIP:
 
 ```bash
