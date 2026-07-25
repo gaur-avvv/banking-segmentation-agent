@@ -617,6 +617,8 @@ The default remains full multi-agent mode with explicit specialist transfers and
 
 ADK agents use a bounded ReAct pattern: **route/plan → act with a registered tool → observe structured output → choose the next tool → finish**. Tool observations include status, cache hits, data quality, metrics, and artifact paths. The browser and terminal traces show these actions and observations as `agent → tool` events; private chain-of-thought is never returned. Deterministic fallbacks stop the loop safely when a provider, dataset, or model is unavailable.
 
+Every query follows this contract: the agent must call `query_route_tool` first, must execute at least one domain tool, must observe its structured result, and only then may return the final answer. If a provider is unavailable, the local deterministic tools still produce the result and the trace records the fallback.
+
 ### Memory and GRU
 
 The project’s episodic memory is intentionally SQLite-backed, consent-gated, encrypted-at-rest-ready, and deterministic. A GRU can optionally be added later as a sequence model for behavior forecasting (for example, next-month activity or churn propensity), but it should not replace the audit memory store or be used as conversational memory by default. GRU training would require labeled temporal outcomes, time-based validation, and additional PyTorch/TensorFlow dependencies.

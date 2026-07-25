@@ -171,6 +171,7 @@ def create_multi_agent_root_agent():
             instruction=(
                 "Use a concise ReAct loop: state the goal internally, call query_route_tool, observe its structured result, "
                 "then call only the required local tools and use each observation to choose the next action. "
+                "Never answer before at least one tool call and observation; the final answer must cite the observed tool result. "
                 "For analytics call eda_tool, feature_engineering_tool, and segmentation_tool as needed. "
                 "For explanations call explainability_tool. Keep all records local, return concise structured summaries, "
                 "and never expose credentials or private chain-of-thought. Reuse cache_hit results."
@@ -185,6 +186,7 @@ def create_multi_agent_root_agent():
         instruction=(
             "Use a concise ReAct loop: first call query_route_tool, observe its route, transfer to the smallest specialist route, "
             "observe each structured tool result, and stop when the requested output is complete. "
+            "Never answer directly before tool calling and observation; return the final response only after the route completes. "
             "Segmentation/comparison/recommendation uses analytics_sequential_pipeline; "
             "explanation, audit, or human review uses governance_review_loop (and analytics only if needed). "
             "The dataset path is the path explicitly provided by the user, otherwise BANKING_DATA_PATH, "
