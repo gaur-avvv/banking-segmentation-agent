@@ -11,7 +11,10 @@ $env:UV_LINK_MODE = if ($env:UV_LINK_MODE) { $env:UV_LINK_MODE } else { "copy" }
 if (Get-Command uv -ErrorAction SilentlyContinue) {
     uv sync --extra dev --extra adk
 } else {
-    if (-not (Test-Path .venv)) { py -m venv .venv }
+    $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
+    if (-not $pythonCommand) { $pythonCommand = Get-Command python -ErrorAction SilentlyContinue }
+    if (-not $pythonCommand) { throw "Python 3.10+ was not found. Install it from https://www.python.org/downloads/windows/" }
+    if (-not (Test-Path .venv)) { & $pythonCommand.Source -m venv .venv }
     & .\.venv\Scripts\python.exe -m pip install --upgrade pip
     & .\.venv\Scripts\python.exe -m pip install -e ".[dev,adk]"
 }
