@@ -605,6 +605,18 @@ banking-agent adk-web --provider gemini --model gemma-4-26b-a4b-it --port 8001
 
 Gemini models are native to Google ADK. OpenRouter, Groq, OpenAI-compatible, and Ollama providers remain available through the local API/CLI planner; use their API keys and model names there. Generation is configured with low temperature and a 512-token cap to reduce quota usage. The system exposes concise tool summaries and decisions, not private chain-of-thought.
 
+If ADK reports a context-cache miss while transferring between specialist agents, use stable mode. It keeps one root instruction and exposes all local tools directly, so the chat does not pause between segmentation and explainability:
+
+```bash
+banking-agent adk-web --stable --port 8001
+```
+
+The default remains full multi-agent mode with explicit specialist transfers and audit traces.
+
+### Memory and GRU
+
+The project’s episodic memory is intentionally SQLite-backed, consent-gated, encrypted-at-rest-ready, and deterministic. A GRU can optionally be added later as a sequence model for behavior forecasting (for example, next-month activity or churn propensity), but it should not replace the audit memory store or be used as conversational memory by default. GRU training would require labeled temporal outcomes, time-based validation, and additional PyTorch/TensorFlow dependencies.
+
 Run against a folder containing the supported ZIP:
 
 ```bash

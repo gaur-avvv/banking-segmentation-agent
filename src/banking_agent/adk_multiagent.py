@@ -153,6 +153,20 @@ def create_multi_agent_root_agent():
         sub_agents=[review_explainability_agent],
         max_iterations=1,
     )
+    if os.environ.get("ADK_STABLE_MODE", "0").lower() in {"1", "true", "yes"}:
+        return Agent(
+            name="banking_root_router_agent",
+            model=model_ref,
+            description="Stable single-instruction banking router for uninterrupted ADK chat.",
+            instruction=(
+                "Use query_route_tool first, then call only the required local tools. "
+                "For analytics call eda_tool, feature_engineering_tool, and segmentation_tool as needed. "
+                "For explanations call explainability_tool. Keep all records local, return concise structured summaries, "
+                "and never expose credentials or private chain-of-thought. Reuse cache_hit results."
+            ),
+            tools=[query_route_tool, eda_tool, feature_engineering_tool, segmentation_tool, explainability_tool],
+            **common,
+        )
     return Agent(
         name="banking_root_router_agent",
         model=model_ref,

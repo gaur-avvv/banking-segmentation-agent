@@ -92,6 +92,7 @@ def _parser() -> argparse.ArgumentParser:
         help="Override LLM_PROVIDER for this run",
     )
     parser.add_argument("--model", help="Override the provider model for this run")
+    parser.add_argument("--stable", action="store_true", help="Use one stable ADK instruction to avoid transfer cache misses")
     return parser
 
 
@@ -243,6 +244,8 @@ def _adk_web(args: argparse.Namespace) -> None:
     # ADK Web launches the root agent in a child process. Pass the selected
     # dataset through the environment so every specialist sees the same path.
     os.environ["BANKING_DATA_PATH"] = args.data_path
+    if args.stable:
+        os.environ["ADK_STABLE_MODE"] = "1"
     if args.provider and args.provider != "auto":
         os.environ["LLM_PROVIDER"] = args.provider
     if args.model:
