@@ -15,6 +15,7 @@ from .recommendations import priority_candidates
 from .gemini import plan_query_with_gemini
 from .memory import MemoryEntry, SQLiteMemoryStore
 from .visualization import create_visualizations
+from .datasets import resolve_dataset_path
 
 
 class AgentState(TypedDict, total=False):
@@ -119,11 +120,13 @@ def build_graph():
 
 
 def run_agent(data_dir: str, query: str, user_id: str | None = None, memory_db: str | None = None, memory_consent: bool = False, llm_provider: str | None = None, llm_model: str | None = None) -> dict:
+    resolved_data_path, resolution_reason = resolve_dataset_path(data_dir)
     memory_store = SQLiteMemoryStore(memory_db) if memory_db else None
-    result = build_graph().invoke({"data_dir": data_dir, "query": query, "events": [], "user_id": user_id, "memory_store": memory_store, "llm_provider": llm_provider, "llm_model": llm_model})
-    out = Path(data_dir).parent / "artifacts"
+    result = build_graph().invoke({"data_dir": resolved_data_path, "query": query, "events": [], "user_id": user_id, "memory_store": memory_store, "llm_provider": llm_provider, "llm_model": llm_model})
+    result["events"].insert(0, {"step": "dataset_resolution", "detail": f"Using {resolved_data_path} ({resolution_reason})."})
+    out = Path(resolved_data_path).parent / "artifacts"
     out.mkdir(exist_ok=True)
-    result["report"]["data_path"] = str(Path(data_dir).expanduser())
+    result["report"]["data_path"] = resolved_data_path
     result["segmented"].to_csv(out / "customer_segments.csv", index=False)
     projection = result.get("projection")
     visualization_paths = []

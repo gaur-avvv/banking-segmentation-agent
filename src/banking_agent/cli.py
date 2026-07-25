@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 from typing import Any
 
 from .agent import run_agent
@@ -21,8 +23,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("chat", "api", "run"),
-        help="Use chat for REPL, api for HTTP service, run for one-shot JSON output",
+        choices=("chat", "api", "adk-web", "run"),
+        help="Use adk-web for the Google ADK UI, chat for REPL, api for HTTP, run for JSON",
     )
     parser.add_argument(
         "--data-path",
@@ -202,6 +204,14 @@ def _api(args: argparse.Namespace) -> None:
     uvicorn.run(create_app(data_path), host=args.host, port=args.port)
 
 
+def _adk_web(args: argparse.Namespace) -> None:
+    """Launch the official Google ADK developer web UI."""
+    if shutil.which("adk") is None:
+        raise SystemExit("Google ADK is not installed. Run: pip install -e '.[adk]'")
+    print(f"Starting Google ADK web UI on http://{args.host}:{args.port}")
+    subprocess.run(["adk", "web", "--host", args.host, "--port", str(args.port)], check=True)
+
+
 def main() -> None:
     args = _parser().parse_args()
     if args.command == "chat":
@@ -209,6 +219,9 @@ def main() -> None:
         return
     if args.command == "api":
         _api(args)
+        return
+    if args.command == "adk-web":
+        _adk_web(args)
         return
     data_path = _resolve_data_path(args)
     print(

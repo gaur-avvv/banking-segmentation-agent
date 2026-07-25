@@ -9,24 +9,28 @@ from .agent import run_agent
 from .contracts import data_quality_report, load_dataset
 from .features import build_customer_features
 from .config import SegmentationConfig
+from .datasets import resolve_dataset_path
 
 
-def eda_tool(data_path: str) -> dict:
+def eda_tool(data_path: str | None = None) -> dict:
     """Profile a local dataset without sending rows to the model provider."""
-    frames = load_dataset(data_path)
-    return {"status": "ok", "data_path": data_path, "quality": data_quality_report(frames)}
+    resolved, reason = resolve_dataset_path(data_path)
+    frames = load_dataset(resolved)
+    return {"status": "ok", "data_path": resolved, "resolution": reason, "quality": data_quality_report(frames)}
 
 
-def feature_engineering_tool(data_path: str) -> dict:
+def feature_engineering_tool(data_path: str | None = None) -> dict:
     """Build the local customer feature table and report its schema."""
-    frames = load_dataset(data_path)
+    resolved, reason = resolve_dataset_path(data_path)
+    frames = load_dataset(resolved)
     features = build_customer_features(frames, SegmentationConfig())
-    return {"status": "ok", "customers": len(features), "features": list(features.columns)}
+    return {"status": "ok", "data_path": resolved, "resolution": reason, "customers": len(features), "features": list(features.columns)}
 
 
-def segmentation_tool(data_path: str, query: str) -> dict:
+def segmentation_tool(data_path: str | None = None, query: str = "Segment customers") -> dict:
     """Run the deterministic, audited segmentation workflow locally."""
-    result = run_agent(data_path, query, llm_provider="none")
+    resolved, _ = resolve_dataset_path(data_path)
+    result = run_agent(resolved, query, llm_provider="none")
     return {"status": "ok", "report": result["report"], "artifacts": result["artifacts"]}
 
 

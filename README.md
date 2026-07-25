@@ -237,7 +237,7 @@ The generated files are ignored by Git. See [data/README.md](data/README.md) for
 
 ## Run the agent
 
-Every command accepts `--data-path` with an absolute or relative path to a CSV, ZIP, or dataset folder. The older `--data-dir` option remains a compatibility alias. The loader detects the canonical four-file format, the supplied `bank_transactions.csv` / ZIP, or a folder containing one transaction CSV/ZIP. Single transaction files support aliases such as `customer_id` / `CustomerID`, `timestamp` / `TransactionDate`, `amount` / `TransactionAmount (INR)`, and `balance` / `CustAccountBalance`. Customer, date/timestamp, and amount are required; missing balance history is safely marked for review.
+Every command accepts `--data-path` with an absolute or relative path to a CSV, ZIP, or dataset folder. The older `--data-dir` option remains a compatibility alias. The loader detects the canonical four-file format, the supplied `bank_transactions.csv` / ZIP, or a folder containing one transaction CSV/ZIP. Single transaction files support aliases such as `customer_id` / `CustomerID`, `timestamp` / `TransactionDate`, `amount` / `TransactionAmount (INR)`, and `balance` / `CustAccountBalance`. Customer, date/timestamp, and amount are required; missing balance history is safely marked for review. Paths are normalized across Linux, macOS, Windows, and WSL (for example, a `C:\\Users\\...` path works in WSL). If a requested path is missing, the agent automatically creates and uses the safe local demo dataset instead of failing with `FileNotFoundError`; the first `dataset_resolution` event records exactly what happened.
 
 Generate synthetic demo data:
 
@@ -307,6 +307,14 @@ Run against a folder on Linux/macOS/WSL:
 banking-agent run \
   --data-path /absolute/path/to/dataset-folder \
   --query "Which regular customers can be converted to priority?"
+```
+
+The same command accepts the Windows path supplied to this project from WSL:
+
+```bash
+banking-agent run --provider none \\
+  --data-path 'C:\\Users\\Dell\\Downloads\\Compressed\\bank_transactions.csv' \\
+  --query "Segment customers into priority, regular, and dormant groups"
 ```
 
 ### HTTP API
@@ -380,7 +388,15 @@ Start the ADK development web UI:
 adk web --port 8001
 ```
 
+The equivalent project command checks that Google ADK is installed and launches the same UI:
+
+```bash
+banking-agent adk-web --host 127.0.0.1 --port 8001
+```
+
 Open `http://127.0.0.1:8001` and select `adk_app`. ADK Web is intended for development/debugging; the project's local console remains `banking-agent api`, which displays the deterministic specialist-agent/tool trace.
+
+The local API console at `/ui` includes a dataset selector populated from `/datasets`, plus an optional custom path field. Leave the custom field empty to use the first discovered dataset; if no dataset exists, it uses `data/demo` automatically. This makes a fresh clone immediately runnable in the ADK web UI, terminal, or API without hard-coding `banking_data.csv`.
 
 Run against a folder containing the supported ZIP:
 

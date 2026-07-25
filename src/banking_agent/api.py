@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from .agent import run_agent
 from .adk_adapter import adk_status
+from .datasets import discover_dataset_paths, resolve_dataset_path
 from .orchestration import build_agent_trace
 
 
@@ -28,9 +29,9 @@ WEB_UI = """<!doctype html>
 <style>body{font-family:system-ui;background:#0f172a;color:#e2e8f0;max-width:1100px;margin:32px auto;padding:0 20px}textarea,input,button{font:inherit;border-radius:8px;border:1px solid #334155;padding:10px}textarea{width:100%;height:90px;background:#111827;color:#fff}input{background:#111827;color:#fff}button{background:#2563eb;color:#fff;cursor:pointer;margin-top:10px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:#1e293b;padding:16px;border-radius:12px;margin-top:16px}pre{white-space:pre-wrap;overflow:auto;background:#020617;padding:12px;border-radius:8px}.event{border-left:4px solid #38bdf8;padding:8px 12px;margin:8px 0;background:#0f172a}.muted{color:#94a3b8}</style></head>
 <body><h1>Banking Segmentation Agent</h1><p class='muted'>Multi-agent trace, tool calls, governance checks, and JSON output.</p>
 <textarea id='query'>Segment customers into priority, regular, and dormant groups and find conversion candidates</textarea>
-<div class='grid'><label>Dataset path<br><input id='path' value='data'></label><label>Provider<br><input id='provider' placeholder='none, gemini, openrouter, groq, ollama'></label></div>
+<div class='grid'><label>Dataset<br><select id='dataset'><option value=''>Loading available datasets...</option></select><br><input id='path' placeholder='Optional custom CSV, ZIP, or folder path'></label><label>Provider<br><input id='provider' placeholder='none, gemini, openrouter, groq, ollama'></label></div>
 <button onclick='run()'>Run agent</button><div id='status' class='panel'>Idle</div><div class='panel'><h2>Agent/tool calls</h2><div id='events'></div></div><div class='panel'><h2>Final JSON response</h2><pre id='json'>{}</pre></div>
-<script>async function run(){const q=document.getElementById('query').value,path=document.getElementById('path').value,provider=document.getElementById('provider').value||null;document.getElementById('events').innerHTML='';document.getElementById('json').textContent='';document.getElementById('status').textContent='Running...';const res=await fetch('/run/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,data_path:path,provider:provider})});const reader=res.body.getReader(),decoder=new TextDecoder();let buffer='';while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;const item=JSON.parse(line.slice(5));if(item.type==='agent_tool_call'){const el=document.createElement('div');el.className='event';el.innerHTML='<b>'+item.agent+'</b> → <b>'+item.tool+'</b><br><span class="muted">'+item.detail+'</span>';document.getElementById('events').appendChild(el)}if(item.type==='final'){document.getElementById('json').textContent=JSON.stringify(item.result,null,2);document.getElementById('status').textContent='Completed'}}}}}</script></body></html>"""
+<script>async function loadDatasets(){try{const r=await fetch('/datasets');const items=await r.json();const select=document.getElementById('dataset');select.innerHTML='';items.forEach((item,i)=>{const o=document.createElement('option');o.value=item.path;o.textContent=item.name+(i===0?' (default)':'');select.appendChild(o)})}catch(e){document.getElementById('dataset').innerHTML='<option value="">Automatic demo fallback</option>'}}async function run(){const q=document.getElementById('query').value,custom=document.getElementById('path').value.trim(),path=custom||document.getElementById('dataset').value||null,provider=document.getElementById('provider').value||null;document.getElementById('events').innerHTML='';document.getElementById('json').textContent='';document.getElementById('status').textContent='Running...';const res=await fetch('/run/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,data_path:path,provider:provider})});const reader=res.body.getReader(),decoder=new TextDecoder();let buffer='';while(true){const x=await reader.read();if(x.done)break;buffer+=decoder.decode(x.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;const item=JSON.parse(line.slice(5));if(item.type==='agent_tool_call'){const el=document.createElement('div');el.className='event';el.innerHTML='<b>'+item.agent+'</b> → <b>'+item.tool+'</b><br><span class="muted">'+item.detail+'</span>';document.getElementById('events').appendChild(el)}if(item.type==='final'){document.getElementById('json').textContent=JSON.stringify(item.result,null,2);document.getElementById('status').textContent='Completed'}}}}}loadDatasets();</script></body></html>"""
 
 
 def create_app(default_data_path: str = "data") -> FastAPI:
@@ -43,6 +44,12 @@ def create_app(default_data_path: str = "data") -> FastAPI:
     @app.get("/ui", response_class=HTMLResponse)
     def ui() -> str:
         return WEB_UI
+
+    @app.get("/datasets")
+    def datasets() -> list[dict[str, str]]:
+        # Ensure a clone always has one safe selectable default.
+        resolve_dataset_path(default_data_path)
+        return discover_dataset_paths()
 
     @app.get("/.well-known/agent.json")
     def agent_card() -> dict[str, Any]:
