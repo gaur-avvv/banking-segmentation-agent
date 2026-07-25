@@ -27,6 +27,27 @@ def _find_column(frame: pd.DataFrame, aliases: tuple[str, ...], required: bool =
     return None
 
 
+def _parse_timestamp_values(values: pd.Series) -> pd.Series:
+    """Parse common banking date formats without pandas inference warnings."""
+    text = values.astype("string").str.strip()
+    parsed = pd.Series(pd.NaT, index=text.index, dtype="datetime64[ns, UTC]")
+    formats = (
+        "%d/%m/%y %H:%M:%S", "%d/%m/%Y %H:%M:%S",
+        "%m/%d/%y %H:%M:%S", "%m/%d/%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S%z",
+        "%d/%m/%y", "%d/%m/%Y", "%m/%d/%y", "%m/%d/%Y", "%Y-%m-%d",
+    )
+    for date_format in formats:
+        missing = parsed.isna()
+        if not missing.any():
+            break
+        parsed.loc[missing] = pd.to_datetime(text.loc[missing], format=date_format, errors="coerce", utc=True)
+    missing = parsed.isna()
+    if missing.any():
+        parsed.loc[missing] = pd.to_datetime(text.loc[missing], format="mixed", errors="coerce", dayfirst=True, utc=True)
+    return parsed
+
+
 def load_dataset(data_path: str | Path) -> dict[str, pd.DataFrame]:
     """Load a canonical folder, a transaction CSV/ZIP, or a folder containing one."""
     source = Path(data_path).expanduser()
@@ -94,7 +115,7 @@ def _bank_transactions_frame_to_contract(raw: pd.DataFrame) -> dict[str, pd.Data
     if time_column is not None:
         time_values = raw[time_column].astype("string").str.replace(r"[^0-9]", "", regex=True).str.zfill(6)
         date_values = date_values + " " + time_values.str.slice(0, 2) + ":" + time_values.str.slice(2, 4) + ":" + time_values.str.slice(4, 6)
-    timestamp = pd.to_datetime(date_values, errors="coerce", dayfirst=True, utc=True)
+    timestamp = _parse_timestamp_values(date_values)
     customer = raw[customer_column].astype("string")
     customers = pd.DataFrame({"customer_id": customer}).dropna().drop_duplicates()
     common = pd.DataFrame({"customer_id": customer, "timestamp": timestamp})
