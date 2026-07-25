@@ -156,6 +156,28 @@ TransactionAmount (INR)
 
 Only fields used by the pipeline are loaded. Demographics and other source columns are deliberately not retained by this adapter.
 
+### Prepare the supplied ZIP locally
+
+The repository does not commit the banking dataset. The source includes customer identifiers, balances, transaction amounts, DOB, gender, and location, so it must remain in approved local/private storage. A clone can recreate the working dataset and deterministic customer-disjoint splits with the included preparation script:
+
+```bash
+python scripts/prepare_bank_transactions.py \
+  --source /path/to/bank_transactions.csv.zip \
+  --output-dir data
+```
+
+Windows PowerShell:
+
+```powershell
+python scripts/prepare_bank_transactions.py `
+  --source 'C:\Users\Dell\Downloads\Compressed\bank_transactions.csv.zip' `
+  --output-dir data
+```
+
+This creates `data/bank_transactions.csv`, `data/splits/train.csv`, `data/splits/validation.csv`, `data/splits/test.csv`, and `data/dataset_manifest.json`. The split unit is `CustomerID` with seed `42`, so no customer's transactions cross train, validation, and test. The agent reads the unzipped `data/bank_transactions.csv` automatically, while its ML lifecycle also derives customer-level train/validation/test partitions and reports them in `artifacts/run_report.json`.
+
+The generated files are ignored by Git. See [data/README.md](data/README.md) for the local workflow.
+
 ## Run the agent
 
 Generate synthetic demo data:

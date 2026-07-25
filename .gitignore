@@ -7,3 +7,6 @@ __pycache__/
 *.egg-info/
 artifacts/*
 !artifacts/.gitkeep
+data/*
+!data/README.md
+!data/.gitkeep

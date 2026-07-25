@@ -16,6 +16,9 @@ def load_dataset(data_dir: str | Path) -> dict[str, pd.DataFrame]:
     source_zip = root / "bank_transactions.csv.zip"
     if source_zip.exists():
         return load_bank_transactions_zip(source_zip)
+    source_csv = root / "bank_transactions.csv"
+    if source_csv.exists():
+        return load_bank_transactions_csv(source_csv)
     frames: dict[str, pd.DataFrame] = {}
     for name, required in REQUIRED.items():
         path = root / f"{name}.csv"
@@ -35,6 +38,17 @@ def load_bank_transactions_zip(path: str | Path) -> dict[str, pd.DataFrame]:
     # is important for the supplied million-row source on local machines.
     needed = ["CustomerID", "CustAccountBalance", "TransactionDate", "TransactionTime", "TransactionAmount (INR)"]
     raw = pd.read_csv(path, compression="zip", usecols=needed, low_memory=False)
+    return _bank_transactions_frame_to_contract(raw)
+
+
+def load_bank_transactions_csv(path: str | Path) -> dict[str, pd.DataFrame]:
+    """Load the unzipped local copy produced by prepare_bank_transactions.py."""
+    needed = ["CustomerID", "CustAccountBalance", "TransactionDate", "TransactionTime", "TransactionAmount (INR)"]
+    raw = pd.read_csv(path, usecols=needed, low_memory=False)
+    return _bank_transactions_frame_to_contract(raw)
+
+
+def _bank_transactions_frame_to_contract(raw: pd.DataFrame) -> dict[str, pd.DataFrame]:
     required = {"CustomerID", "CustAccountBalance", "TransactionDate", "TransactionTime", "TransactionAmount (INR)"}
     missing = required - set(raw.columns)
     if missing:
