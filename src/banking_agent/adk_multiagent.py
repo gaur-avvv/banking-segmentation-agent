@@ -105,16 +105,24 @@ def create_multi_agent_root_agent():
         raise RuntimeError("Install the optional ADK extra with: pip install -e '.[adk]'") from exc
 
     model = os.environ.get("ADK_MODEL", os.environ.get("GEMINI_MODEL", "gemma-4-26b-a4b-it"))
+    provider = os.environ.get("LLM_PROVIDER", "auto").strip().lower()
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     try:
         from google.genai.types import GenerateContentConfig
         generation_config = GenerateContentConfig(temperature=0.1, max_output_tokens=512)
     except ImportError:
         generation_config = None
-    try:
-        from google.adk.models import Gemini
-        from google.genai.types import HttpRetryOptions
-        model_ref = Gemini(model=model, retry_options=HttpRetryOptions(initial_delay=1, attempts=3))
-    except ImportError:
+    use_gemini_model = provider in {"gemini", "auto"} and bool(gemini_api_key)
+    if use_gemini_model:
+        try:
+            from google.adk.models import Gemini
+            from google.genai.types import HttpRetryOptions
+            model_ref = Gemini(model=model, retry_options=HttpRetryOptions(initial_delay=1, attempts=3))
+        except ImportError:
+            model_ref = model
+    else:
+        # Keep root-agent construction local/offline when Gemini credentials are absent
+        # or when a non-Gemini provider is selected.
         model_ref = model
     common = {"generate_content_config": generation_config} if generation_config is not None else {}
     eda_agent = Agent(
